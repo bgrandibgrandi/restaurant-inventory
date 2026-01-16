@@ -4,21 +4,40 @@ import { useState, useEffect } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import Link from 'next/link';
 
+interface Category {
+  id: string;
+  name: string;
+}
+
 export default function EditItem() {
   const router = useRouter();
   const params = useParams();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [categories, setCategories] = useState<Category[]>([]);
   const [formData, setFormData] = useState({
     name: '',
     description: '',
     unit: 'kg',
-    category: '',
+    categoryId: '',
   });
 
   useEffect(() => {
     fetchItem();
+    fetchCategories();
   }, []);
+
+  const fetchCategories = async () => {
+    try {
+      const response = await fetch('/api/categories');
+      if (response.ok) {
+        const data = await response.json();
+        setCategories(data);
+      }
+    } catch (error) {
+      console.error('Error fetching categories:', error);
+    }
+  };
 
   const fetchItem = async () => {
     try {
@@ -29,7 +48,7 @@ export default function EditItem() {
           name: data.name || '',
           description: data.description || '',
           unit: data.unit || 'kg',
-          category: data.category?.name || '',
+          categoryId: data.categoryId || '',
         });
       }
     } catch (error) {
@@ -53,6 +72,7 @@ export default function EditItem() {
           name: formData.name,
           description: formData.description,
           unit: formData.unit,
+          categoryId: formData.categoryId || null,
         }),
       });
 
@@ -177,6 +197,30 @@ export default function EditItem() {
                 <option value="pieces">pieces</option>
                 <option value="boxes">boxes</option>
                 <option value="cases">cases</option>
+              </select>
+            </div>
+
+            {/* Category */}
+            <div>
+              <label
+                htmlFor="categoryId"
+                className="block text-sm font-medium text-gray-700 mb-2"
+              >
+                Category
+              </label>
+              <select
+                id="categoryId"
+                name="categoryId"
+                value={formData.categoryId}
+                onChange={handleChange}
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent"
+              >
+                <option value="">No Category</option>
+                {categories.map((category) => (
+                  <option key={category.id} value={category.id}>
+                    {category.name}
+                  </option>
+                ))}
               </select>
             </div>
 
