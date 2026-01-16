@@ -82,6 +82,12 @@ export default function ItemsPage() {
                   Items
                 </Link>
                 <Link
+                  href="/stores"
+                  className="text-gray-600 hover:text-gray-900 transition"
+                >
+                  Venues
+                </Link>
+                <Link
                   href="/stock/new"
                   className="text-gray-600 hover:text-gray-900 transition"
                 >
