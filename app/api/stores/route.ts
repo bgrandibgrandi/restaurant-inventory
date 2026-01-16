@@ -21,7 +21,7 @@ export async function GET() {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { name, accountId } = body;
+    const { name, accountId, address } = body;
 
     if (!name) {
       return NextResponse.json(
@@ -30,10 +30,30 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    if (!accountId) {
+      return NextResponse.json(
+        { error: 'Account ID is required' },
+        { status: 400 }
+      );
+    }
+
+    // Verify account exists
+    const account = await prisma.account.findUnique({
+      where: { id: accountId },
+    });
+
+    if (!account) {
+      return NextResponse.json(
+        { error: 'Account not found' },
+        { status: 404 }
+      );
+    }
+
     const store = await prisma.store.create({
       data: {
         name,
-        accountId: accountId || 'default-account',
+        address: address || null,
+        accountId,
       },
     });
 
@@ -41,7 +61,7 @@ export async function POST(request: NextRequest) {
   } catch (error) {
     console.error('Error creating store:', error);
     return NextResponse.json(
-      { error: 'Failed to create store' },
+      { error: 'Failed to create store: ' + (error as Error).message },
       { status: 500 }
     );
   }
