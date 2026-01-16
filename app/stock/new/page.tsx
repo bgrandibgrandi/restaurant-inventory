@@ -88,6 +88,15 @@ export default function NewStock() {
     setLoading(true);
 
     try {
+      // Get accountId from the selected store
+      const storeRes = await fetch(`/api/stores/${formData.storeId}`);
+      if (!storeRes.ok) {
+        alert('Failed to get store information');
+        return;
+      }
+      const store = await storeRes.json();
+      const accountId = store.accountId;
+
       let itemId = formData.itemId;
 
       // Create new item if in create mode
@@ -100,7 +109,7 @@ export default function NewStock() {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
               name: formData.newCategoryName,
-              accountId: 'default-account',
+              accountId: accountId,
             }),
           });
           const newCategory = await catRes.json();
@@ -115,7 +124,7 @@ export default function NewStock() {
             name: formData.newItemName,
             unit: formData.newItemUnit,
             categoryId: categoryId || null,
-            accountId: 'default-account',
+            accountId: accountId,
           }),
         });
         const newItem = await itemRes.json();
@@ -133,18 +142,19 @@ export default function NewStock() {
           unitCost: formData.unitCost ? parseFloat(formData.unitCost) : null,
           currency: formData.currency,
           notes: formData.notes || null,
-          accountId: 'default-account',
+          accountId: accountId,
         }),
       });
 
       if (stockRes.ok) {
         router.push('/dashboard');
       } else {
-        alert('Failed to add stock');
+        const errorData = await stockRes.json();
+        alert(`Failed to add stock: ${errorData.error || 'Unknown error'}`);
       }
     } catch (error) {
       console.error('Error:', error);
-      alert('An error occurred');
+      alert('An error occurred: ' + (error as Error).message);
     } finally {
       setLoading(false);
     }
