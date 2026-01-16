@@ -9,6 +9,7 @@ type StockEntry = {
   quantity: number;
   unitCost: number | null;
   currency: string;
+  notes: string | null;
   item: {
     id: string;
     name: string;
@@ -27,6 +28,13 @@ export default function Dashboard() {
   const [stock, setStock] = useState<StockEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [userName, setUserName] = useState('');
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editValues, setEditValues] = useState<{
+    quantity: string;
+    unitCost: string;
+    currency: string;
+    notes: string;
+  }>({ quantity: '', unitCost: '', currency: 'EUR', notes: '' });
 
   useEffect(() => {
     const name = localStorage.getItem('userName') || 'there';
@@ -43,6 +51,67 @@ export default function Dashboard() {
       console.error('Error fetching stock:', error);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleEdit = (entry: StockEntry) => {
+    setEditingId(entry.id);
+    setEditValues({
+      quantity: entry.quantity.toString(),
+      unitCost: entry.unitCost?.toString() || '',
+      currency: entry.currency,
+      notes: entry.notes || '',
+    });
+  };
+
+  const handleCancelEdit = () => {
+    setEditingId(null);
+    setEditValues({ quantity: '', unitCost: '', currency: 'EUR', notes: '' });
+  };
+
+  const handleSaveEdit = async (id: string) => {
+    try {
+      const response = await fetch(`/api/stock/${id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          quantity: parseFloat(editValues.quantity),
+          unitCost: editValues.unitCost ? parseFloat(editValues.unitCost) : null,
+          currency: editValues.currency,
+          notes: editValues.notes || null,
+        }),
+      });
+
+      if (response.ok) {
+        const updated = await response.json();
+        setStock(stock.map((s) => (s.id === id ? updated : s)));
+        setEditingId(null);
+        setEditValues({ quantity: '', unitCost: '', currency: 'EUR', notes: '' });
+      } else {
+        alert('Failed to update stock entry');
+      }
+    } catch (error) {
+      console.error('Error updating stock:', error);
+      alert('An error occurred');
+    }
+  };
+
+  const handleDelete = async (id: string) => {
+    if (!confirm('Are you sure you want to delete this stock entry?')) return;
+
+    try {
+      const response = await fetch(`/api/stock/${id}`, {
+        method: 'DELETE',
+      });
+
+      if (response.ok) {
+        setStock(stock.filter((s) => s.id !== id));
+      } else {
+        alert('Failed to delete stock entry');
+      }
+    } catch (error) {
+      console.error('Error deleting stock:', error);
+      alert('An error occurred');
     }
   };
 
@@ -284,49 +353,132 @@ export default function Dashboard() {
                       Unit Cost
                     </th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Currency
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                       Total Value
                     </th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                       Venue
                     </th>
+                    <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Actions
+                    </th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100">
-                  {stock.map((entry) => (
-                    <tr
-                      key={entry.id}
-                      className="hover:bg-gray-50 transition"
-                    >
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="text-sm font-medium text-gray-900">
-                          {entry.item.name}
-                        </div>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
-                          {entry.item.category?.name || 'Uncategorized'}
-                        </span>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                        {entry.quantity} {entry.item.unit}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                        {entry.unitCost
-                          ? `${entry.currency} ${entry.unitCost.toFixed(2)}`
-                          : '-'}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-                        {entry.unitCost
-                          ? `${entry.currency} ${(
-                              entry.quantity * entry.unitCost
-                            ).toFixed(2)}`
-                          : '-'}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                        {entry.store.name}
-                      </td>
-                    </tr>
-                  ))}
+                  {stock.map((entry) => {
+                    const isEditing = editingId === entry.id;
+                    return (
+                      <tr
+                        key={entry.id}
+                        className={isEditing ? 'bg-red-50' : 'hover:bg-gray-50 transition'}
+                      >
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <div className="text-sm font-medium text-gray-900">
+                            {entry.item.name}
+                          </div>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                            {entry.item.category?.name || 'Uncategorized'}
+                          </span>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                          {isEditing ? (
+                            <input
+                              type="number"
+                              step="0.01"
+                              value={editValues.quantity}
+                              onChange={(e) =>
+                                setEditValues({ ...editValues, quantity: e.target.value })
+                              }
+                              className="w-24 px-2 py-1 border border-red-300 rounded focus:ring-2 focus:ring-red-500 focus:border-transparent"
+                            />
+                          ) : (
+                            `${entry.quantity} ${entry.item.unit}`
+                          )}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                          {isEditing ? (
+                            <input
+                              type="number"
+                              step="0.01"
+                              value={editValues.unitCost}
+                              onChange={(e) =>
+                                setEditValues({ ...editValues, unitCost: e.target.value })
+                              }
+                              className="w-24 px-2 py-1 border border-red-300 rounded focus:ring-2 focus:ring-red-500 focus:border-transparent"
+                              placeholder="0.00"
+                            />
+                          ) : entry.unitCost ? (
+                            entry.unitCost.toFixed(2)
+                          ) : (
+                            '-'
+                          )}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                          {isEditing ? (
+                            <select
+                              value={editValues.currency}
+                              onChange={(e) =>
+                                setEditValues({ ...editValues, currency: e.target.value })
+                              }
+                              className="w-20 px-2 py-1 border border-red-300 rounded focus:ring-2 focus:ring-red-500 focus:border-transparent"
+                            >
+                              <option value="EUR">EUR</option>
+                              <option value="USD">USD</option>
+                              <option value="DKK">DKK</option>
+                              <option value="GBP">GBP</option>
+                            </select>
+                          ) : (
+                            entry.currency
+                          )}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+                          {entry.unitCost
+                            ? `${entry.currency} ${(entry.quantity * entry.unitCost).toFixed(2)}`
+                            : '-'}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                          {entry.store.name}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                          {isEditing ? (
+                            <div className="flex justify-end gap-2">
+                              <button
+                                onClick={() => handleSaveEdit(entry.id)}
+                                className="text-green-600 hover:text-green-900 font-medium"
+                              >
+                                Save
+                              </button>
+                              <button
+                                onClick={handleCancelEdit}
+                                className="text-gray-600 hover:text-gray-900 font-medium"
+                              >
+                                Cancel
+                              </button>
+                            </div>
+                          ) : (
+                            <div className="flex justify-end gap-2">
+                              <button
+                                onClick={() => handleEdit(entry)}
+                                className="text-red-600 hover:text-red-900 font-medium"
+                              >
+                                Edit
+                              </button>
+                              <button
+                                onClick={() => handleDelete(entry.id)}
+                                className="text-gray-600 hover:text-gray-900 font-medium"
+                              >
+                                Delete
+                              </button>
+                            </div>
+                          )}
+                        </td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             </div>
