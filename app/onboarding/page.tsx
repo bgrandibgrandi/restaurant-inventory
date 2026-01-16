@@ -39,11 +39,14 @@ export default function Onboarding() {
         }),
       });
 
-      let accountId = 'default-account';
-      if (accountResponse.ok) {
-        const account = await accountResponse.json();
-        accountId = account.id;
+      if (!accountResponse.ok) {
+        const errorData = await accountResponse.json();
+        alert(`Failed to create account: ${errorData.error || 'Unknown error'}`);
+        return;
       }
+
+      const account = await accountResponse.json();
+      const accountId = account.id;
 
       // Create store
       const response = await fetch('/api/stores', {
@@ -52,13 +55,16 @@ export default function Onboarding() {
         body: JSON.stringify({
           name: formData.storeName,
           accountId: accountId,
+          address: '',
         }),
       });
 
       if (response.ok) {
         const store = await response.json();
-        localStorage.setItem('currentStore', JSON.stringify(store));
-        localStorage.setItem('userName', formData.userName);
+        if (typeof window !== 'undefined') {
+          localStorage.setItem('currentStore', JSON.stringify(store));
+          localStorage.setItem('userName', formData.userName);
+        }
         router.push('/dashboard');
       } else {
         const errorData = await response.json();
