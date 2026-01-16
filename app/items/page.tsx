@@ -7,7 +7,9 @@ import { useRouter } from 'next/navigation';
 interface Item {
   id: string;
   name: string;
-  category: string | null;
+  category: {
+    name: string;
+  } | null;
   unit: string;
   description: string | null;
   createdAt: string;
@@ -187,7 +189,7 @@ export default function ItemsPage() {
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
                         <span className="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-gray-100 text-gray-800">
-                          {item.category || 'Uncategorized'}
+                          {item.category?.name || 'Uncategorized'}
                         </span>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
