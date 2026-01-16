@@ -37,7 +37,7 @@ export default function Dashboard() {
   }>({ quantity: '', unitCost: '', currency: 'EUR', notes: '' });
 
   useEffect(() => {
-    const name = localStorage.getItem('userName') || 'there';
+    const name = typeof window !== 'undefined' ? localStorage.getItem('userName') || 'there' : 'there';
     setUserName(name);
     fetchStock();
   }, []);

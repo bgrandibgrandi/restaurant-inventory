@@ -67,10 +67,14 @@ export default function NewStock() {
       setStores(storesData);
 
       // Set default store if available
-      const currentStore = localStorage.getItem('currentStore');
-      if (currentStore) {
-        const store = JSON.parse(currentStore);
-        setFormData((prev) => ({ ...prev, storeId: store.id }));
+      if (typeof window !== 'undefined') {
+        const currentStore = localStorage.getItem('currentStore');
+        if (currentStore) {
+          const store = JSON.parse(currentStore);
+          setFormData((prev) => ({ ...prev, storeId: store.id }));
+        } else if (storesData.length > 0) {
+          setFormData((prev) => ({ ...prev, storeId: storesData[0].id }));
+        }
       } else if (storesData.length > 0) {
         setFormData((prev) => ({ ...prev, storeId: storesData[0].id }));
       }
