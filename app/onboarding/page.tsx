@@ -29,13 +29,29 @@ export default function Onboarding() {
   const handleFinish = async () => {
     setLoading(true);
     try {
+      // First, ensure account exists
+      const accountResponse = await fetch('/api/accounts', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: 'My Restaurant',
+          baseCurrency: 'EUR',
+        }),
+      });
+
+      let accountId = 'default-account';
+      if (accountResponse.ok) {
+        const account = await accountResponse.json();
+        accountId = account.id;
+      }
+
       // Create store
       const response = await fetch('/api/stores', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           name: formData.storeName,
-          accountId: 'default-account',
+          accountId: accountId,
         }),
       });
 
@@ -45,18 +61,26 @@ export default function Onboarding() {
         localStorage.setItem('userName', formData.userName);
         router.push('/dashboard');
       } else {
-        alert('Failed to create venue');
+        const errorData = await response.json();
+        alert(`Failed to create venue: ${errorData.error || 'Unknown error'}`);
       }
     } catch (error) {
       console.error('Error:', error);
-      alert('An error occurred');
+      alert('An error occurred: ' + (error as Error).message);
     } finally {
       setLoading(false);
     }
   };
 
+  const handleKeyPress = (e: React.KeyboardEvent, action: () => void) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      action();
+    }
+  };
+
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-blue-50 flex items-center justify-center p-4">
+    <div className="min-h-screen bg-gradient-to-br from-red-50 via-white to-red-50 flex items-center justify-center p-4">
       <div className="w-full max-w-md">
         {/* Header */}
         <div className="text-center mb-8">
@@ -78,7 +102,7 @@ export default function Onboarding() {
           </div>
           <div className="h-2 bg-gray-200 rounded-full overflow-hidden">
             <div
-              className="h-full bg-blue-600 rounded-full transition-all duration-300"
+              className="h-full bg-red-600 rounded-full transition-all duration-300"
               style={{ width: `${(step / 3) * 100}%` }}
             />
           </div>
@@ -108,15 +132,16 @@ export default function Onboarding() {
                   onChange={(e) =>
                     setFormData({ ...formData, userName: e.target.value })
                   }
+                  onKeyPress={(e) => handleKeyPress(e, handleNext)}
                   placeholder="Bruno Grandi"
-                  className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent transition"
+                  className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-red-500 focus:border-transparent transition"
                   autoFocus
                 />
               </div>
 
               <button
                 onClick={handleNext}
-                className="w-full bg-blue-600 hover:bg-blue-700 text-white font-medium py-3 px-6 rounded-xl transition shadow-lg shadow-blue-500/30 hover:shadow-xl hover:shadow-blue-500/40"
+                className="w-full bg-red-600 hover:bg-red-700 text-white font-medium py-3 px-6 rounded-xl transition shadow-lg shadow-red-500/30 hover:shadow-xl hover:shadow-red-500/40"
               >
                 Continue
               </button>
@@ -145,8 +170,9 @@ export default function Onboarding() {
                   onChange={(e) =>
                     setFormData({ ...formData, storeName: e.target.value })
                   }
+                  onKeyPress={(e) => handleKeyPress(e, handleNext)}
                   placeholder="Downtown Location"
-                  className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent transition"
+                  className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-red-500 focus:border-transparent transition"
                   autoFocus
                 />
               </div>
@@ -160,7 +186,7 @@ export default function Onboarding() {
                 </button>
                 <button
                   onClick={handleNext}
-                  className="flex-1 bg-blue-600 hover:bg-blue-700 text-white font-medium py-3 px-6 rounded-xl transition shadow-lg shadow-blue-500/30"
+                  className="flex-1 bg-red-600 hover:bg-red-700 text-white font-medium py-3 px-6 rounded-xl transition shadow-lg shadow-red-500/30"
                 >
                   Continue
                 </button>
@@ -172,9 +198,9 @@ export default function Onboarding() {
           {step === 3 && (
             <div className="space-y-6">
               <div>
-                <div className="w-16 h-16 bg-blue-100 rounded-2xl flex items-center justify-center mx-auto mb-4">
+                <div className="w-16 h-16 bg-red-100 rounded-2xl flex items-center justify-center mx-auto mb-4">
                   <svg
-                    className="w-8 h-8 text-blue-600"
+                    className="w-8 h-8 text-red-600"
                     fill="none"
                     stroke="currentColor"
                     viewBox="0 0 24 24"
@@ -195,7 +221,7 @@ export default function Onboarding() {
                 </p>
               </div>
 
-              <div className="bg-blue-50 rounded-xl p-4 space-y-2">
+              <div className="bg-red-50 rounded-xl p-4 space-y-2">
                 <div className="flex items-center justify-between">
                   <span className="text-sm text-gray-600">Your name:</span>
                   <span className="text-sm font-medium text-gray-900">
@@ -221,7 +247,7 @@ export default function Onboarding() {
                 <button
                   onClick={handleFinish}
                   disabled={loading}
-                  className="flex-1 bg-blue-600 hover:bg-blue-700 text-white font-medium py-3 px-6 rounded-xl transition shadow-lg shadow-blue-500/30 disabled:opacity-50"
+                  className="flex-1 bg-red-600 hover:bg-red-700 text-white font-medium py-3 px-6 rounded-xl transition shadow-lg shadow-red-500/30 disabled:opacity-50"
                 >
                   {loading ? 'Setting up...' : 'Get Started'}
                 </button>
