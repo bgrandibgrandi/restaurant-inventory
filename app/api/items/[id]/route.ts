@@ -3,11 +3,12 @@ import { prisma } from '@/lib/db';
 
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { id } = await params;
     const item = await prisma.item.findUnique({
-      where: { id: params.id },
+      where: { id },
       include: {
         category: true,
       },
@@ -29,14 +30,15 @@ export async function GET(
 
 export async function PUT(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { id } = await params;
     const body = await request.json();
     const { name, description, unit, categoryId } = body;
 
     const item = await prisma.item.update({
-      where: { id: params.id },
+      where: { id },
       data: {
         name,
         description,
@@ -57,17 +59,18 @@ export async function PUT(
 
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { id } = await params;
     // Delete associated stock entries first
     await prisma.stockEntry.deleteMany({
-      where: { itemId: params.id },
+      where: { itemId: id },
     });
 
     // Then delete the item
     await prisma.item.delete({
-      where: { id: params.id },
+      where: { id },
     });
 
     return NextResponse.json({ success: true });
