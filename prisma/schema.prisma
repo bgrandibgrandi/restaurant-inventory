@@ -1,0 +1,86 @@
+// This is your Prisma schema file
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model Account {
+  id            String         @id @default(cuid())
+  name          String
+  baseCurrency  String         @default("EUR")
+  createdAt     DateTime       @default(now())
+  users         User[]
+  stores        Store[]
+  items         Item[]
+  categories    Category[]
+  stockEntries  StockEntry[]
+}
+
+model User {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  name      String?
+  image     String?
+  accountId String
+  account   Account  @relation(fields: [accountId], references: [id])
+  createdAt DateTime @default(now())
+}
+
+model Store {
+  id           String       @id @default(cuid())
+  name         String
+  accountId    String
+  account      Account      @relation(fields: [accountId], references: [id])
+  stockEntries StockEntry[]
+  createdAt    DateTime     @default(now())
+}
+
+// Reusable Item Master (like a product catalog)
+model Item {
+  id           String       @id @default(cuid())
+  name         String
+  description  String?
+  unit         String       // kg, L, pieces, etc.
+  categoryId   String?
+  category     Category?    @relation(fields: [categoryId], references: [id])
+  accountId    String
+  account      Account      @relation(fields: [accountId], references: [id])
+  stockEntries StockEntry[]
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
+}
+
+// Reusable Categories
+model Category {
+  id        String   @id @default(cuid())
+  name      String
+  parentId  String?
+  parent    Category? @relation("CategoryToCategory", fields: [parentId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  children  Category[] @relation("CategoryToCategory")
+  accountId String
+  account   Account  @relation(fields: [accountId], references: [id])
+  items     Item[]
+  createdAt DateTime @default(now())
+}
+
+// Actual Stock Entries (quantity + cost per store)
+model StockEntry {
+  id        String   @id @default(cuid())
+  itemId    String
+  item      Item     @relation(fields: [itemId], references: [id])
+  storeId   String
+  store     Store    @relation(fields: [storeId], references: [id])
+  quantity  Float
+  unitCost  Float?   // Optional cost
+  currency  String   @default("EUR")
+  accountId String
+  account   Account  @relation(fields: [accountId], references: [id])
+  notes     String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
