@@ -97,19 +97,6 @@ export default function StoresPage() {
 
   const handleDelete = async (id: string) => {
     try {
-      // Check if there are stock entries for this store
-      const stockResponse = await fetch('/api/stock');
-      if (stockResponse.ok) {
-        const stockData = await stockResponse.json();
-        const hasStock = stockData.some((entry: any) => entry.storeId === id);
-
-        if (hasStock) {
-          alert('Cannot delete venue with existing stock entries. Please remove all stock first.');
-          setDeleteConfirm(null);
-          return;
-        }
-      }
-
       const response = await fetch(`/api/stores/${id}`, {
         method: 'DELETE',
       });
@@ -120,10 +107,12 @@ export default function StoresPage() {
       } else {
         const errorData = await response.json();
         alert(`Failed to delete venue: ${errorData.error || 'Unknown error'}`);
+        setDeleteConfirm(null);
       }
     } catch (error) {
       console.error('Error deleting store:', error);
       alert('An error occurred');
+      setDeleteConfirm(null);
     }
   };
 
