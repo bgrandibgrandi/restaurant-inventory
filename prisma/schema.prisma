@@ -10,19 +10,23 @@ datasource db {
 }
 
 model Account {
-  id            String         @id @default(cuid())
-  name          String
-  baseCurrency  String         @default("EUR")
-  createdAt     DateTime       @default(now())
-  users         User[]
-  stores        Store[]
-  items         Item[]
-  categories    Category[]
-  stockEntries  StockEntry[]
-  stockCounts   StockCount[]
-  roles         Role[]
-  suppliers     Supplier[]
-  invoices      Invoice[]
+  id              String          @id @default(cuid())
+  name            String
+  baseCurrency    String          @default("EUR")
+  createdAt       DateTime        @default(now())
+  users           User[]
+  stores          Store[]
+  items           Item[]
+  categories      Category[]
+  stockEntries    StockEntry[]
+  stockCounts     StockCount[]
+  roles           Role[]
+  suppliers       Supplier[]
+  invoices        Invoice[]
+  stockMovements  StockMovement[]
+  wasteReasons    WasteReason[]
+  stockTransfers  StockTransfer[]
+  notifications   Notification[]
 }
 
 model Role {
@@ -53,38 +57,43 @@ model User {
 }
 
 model Store {
-  id           String       @id @default(cuid())
-  name         String
-  address      String?
-  accountId    String
-  account      Account      @relation(fields: [accountId], references: [id])
-  stockEntries StockEntry[]
-  stockCounts  StockCount[]
-  invoices     Invoice[]
-  createdAt    DateTime     @default(now())
+  id              String          @id @default(cuid())
+  name            String
+  address         String?
+  accountId       String
+  account         Account         @relation(fields: [accountId], references: [id])
+  stockEntries    StockEntry[]
+  stockCounts     StockCount[]
+  invoices        Invoice[]
+  stockMovements  StockMovement[]
+  transfersFrom   StockTransfer[] @relation("TransferFrom")
+  transfersTo     StockTransfer[] @relation("TransferTo")
+  createdAt       DateTime        @default(now())
 }
 
 // Reusable Item Master (like a product catalog)
 model Item {
-  id            String        @id @default(cuid())
-  name          String
-  description   String?
-  invoiceItems  InvoiceItem[]
-  unit          String        // kg, L, pieces, etc.
-  categoryId    String?
-  category      Category?     @relation(fields: [categoryId], references: [id])
-  supplierId    String?
-  supplier      Supplier?     @relation(fields: [supplierId], references: [id])
-  accountId     String
-  account       Account       @relation(fields: [accountId], references: [id])
-  stockEntries  StockEntry[]
-  minStockLevel Float?        // Optional minimum stock alert level
-  maxStockLevel Float?        // Optional maximum stock level
-  sku           String?       // Optional SKU/product code
-  barcode       String?       // Optional barcode
-  costPrice     Float?        // Default cost price
-  createdAt     DateTime      @default(now())
-  updatedAt     DateTime      @updatedAt
+  id                  String              @id @default(cuid())
+  name                String
+  description         String?
+  invoiceItems        InvoiceItem[]
+  unit                String              // kg, L, pieces, etc.
+  categoryId          String?
+  category            Category?           @relation(fields: [categoryId], references: [id])
+  supplierId          String?
+  supplier            Supplier?           @relation(fields: [supplierId], references: [id])
+  accountId           String
+  account             Account             @relation(fields: [accountId], references: [id])
+  stockEntries        StockEntry[]
+  stockMovements      StockMovement[]
+  stockTransferItems  StockTransferItem[]
+  minStockLevel       Float?              // Optional minimum stock alert level
+  maxStockLevel       Float?              // Optional maximum stock level
+  sku                 String?             // Optional SKU/product code
+  barcode             String?             // Optional barcode
+  costPrice           Float?              // Default cost price
+  createdAt           DateTime            @default(now())
+  updatedAt           DateTime            @updatedAt
 }
 
 // Reusable Categories
@@ -103,41 +112,48 @@ model Category {
 
 // Actual Stock Entries (quantity + cost per store)
 model StockEntry {
-  id           String      @id @default(cuid())
-  itemId       String
-  item         Item        @relation(fields: [itemId], references: [id])
-  storeId      String
-  store        Store       @relation(fields: [storeId], references: [id])
-  quantity     Float
-  unitCost     Float?      // Optional cost
-  currency     String      @default("EUR")
-  accountId    String
-  account      Account     @relation(fields: [accountId], references: [id])
-  notes        String?
-  stockCountId String?     // Link to count session if created during a count
-  stockCount   StockCount? @relation(fields: [stockCountId], references: [id])
-  createdAt    DateTime    @default(now())
-  updatedAt    DateTime    @updatedAt
+  id               String      @id @default(cuid())
+  itemId           String
+  item             Item        @relation(fields: [itemId], references: [id])
+  storeId          String
+  store            Store       @relation(fields: [storeId], references: [id])
+  quantity         Float
+  unitCost         Float?      // Optional cost
+  currency         String      @default("EUR")
+  accountId        String
+  account          Account     @relation(fields: [accountId], references: [id])
+  notes            String?
+  stockCountId     String?     // Link to count session if created during a count
+  stockCount       StockCount? @relation(fields: [stockCountId], references: [id])
+  expectedQuantity Float?      // Calculated expected quantity at time of count
+  discrepancy      Float?      // Actual - expected
+  createdAt        DateTime    @default(now())
+  updatedAt        DateTime    @updatedAt
 }
 
 // Stock Count Session - groups multiple stock entries from a single count
 model StockCount {
-  id           String       @id @default(cuid())
-  name         String?      // Optional name like "Weekly Count - Week 3"
-  storeId      String
-  store        Store        @relation(fields: [storeId], references: [id])
-  userId       String       // Who performed the count
-  user         User         @relation(fields: [userId], references: [id])
-  accountId    String
-  account      Account      @relation(fields: [accountId], references: [id])
-  status       String       @default("in_progress") // in_progress, completed, cancelled
-  entries      StockEntry[]
-  totalValue   Float?       // Calculated total value of count
-  itemsCounted Int          @default(0)
-  notes        String?
-  completedAt  DateTime?
-  createdAt    DateTime     @default(now())
-  updatedAt    DateTime     @updatedAt
+  id               String       @id @default(cuid())
+  name             String?      // Optional name like "Weekly Count - Week 3"
+  storeId          String
+  store            Store        @relation(fields: [storeId], references: [id])
+  userId           String       // Who performed the count
+  user             User         @relation(fields: [userId], references: [id])
+  accountId        String
+  account          Account      @relation(fields: [accountId], references: [id])
+  status           String       @default("in_progress") // in_progress, completed, approved, cancelled
+  entries          StockEntry[]
+  totalValue       Float?       // Calculated total value of count
+  expectedValue    Float?       // Sum of expected values
+  discrepancyValue Float?       // totalValue - expectedValue
+  itemsCounted     Int          @default(0)
+  notes            String?
+  adjustmentNotes  String?      // Notes when approving/adjusting
+  completedAt      DateTime?
+  approvedAt       DateTime?
+  approvedBy       String?      // User ID who approved
+  createdAt        DateTime     @default(now())
+  updatedAt        DateTime     @updatedAt
 }
 
 // Supplier/Vendor
@@ -209,4 +225,109 @@ model InvoiceItem {
   status                String   @default("pending") // pending, confirmed, skipped, created
   createdItemId         String?  // If a new item was created from this
   createdAt             DateTime @default(now())
+}
+
+// ============================================
+// STOCK MOVEMENT TRACKING
+// ============================================
+
+enum MovementType {
+  PURCHASE     // Stock in from invoice/manual
+  WASTE        // Stock out - spoilage/damage
+  TRANSFER_IN  // Stock in from another store
+  TRANSFER_OUT // Stock out to another store
+  ADJUSTMENT   // Count discrepancy adjustment
+  SALE         // Future: POS integration
+}
+
+// Track all inventory movements (ins and outs)
+model StockMovement {
+  id            String       @id @default(cuid())
+  itemId        String
+  item          Item         @relation(fields: [itemId], references: [id])
+  storeId       String
+  store         Store        @relation(fields: [storeId], references: [id])
+  quantity      Float        // Positive for in, negative for out
+  type          MovementType
+  reason        String?      // For waste: reason code, for adjustment: explanation
+  notes         String?
+  referenceId   String?      // Invoice ID, Transfer ID, Count ID
+  referenceType String?      // "invoice", "transfer", "count", "manual"
+  costPrice     Float?       // Cost per unit at time of movement
+  createdBy     String?      // User ID who created the movement
+  accountId     String
+  account       Account      @relation(fields: [accountId], references: [id])
+  createdAt     DateTime     @default(now())
+}
+
+// Categorized waste reasons
+model WasteReason {
+  id          String   @id @default(cuid())
+  name        String   // "Expired", "Damaged", "Spillage", "Theft", "Other"
+  description String?
+  isActive    Boolean  @default(true)
+  accountId   String
+  account     Account  @relation(fields: [accountId], references: [id])
+  createdAt   DateTime @default(now())
+
+  @@unique([name, accountId])
+}
+
+// ============================================
+// INTER-STORE TRANSFERS
+// ============================================
+
+enum TransferStatus {
+  PENDING
+  IN_TRANSIT
+  COMPLETED
+  CANCELLED
+}
+
+// Transfer header - tracks overall transfer between stores
+model StockTransfer {
+  id            String         @id @default(cuid())
+  fromStoreId   String
+  fromStore     Store          @relation("TransferFrom", fields: [fromStoreId], references: [id])
+  toStoreId     String
+  toStore       Store          @relation("TransferTo", fields: [toStoreId], references: [id])
+  status        TransferStatus @default(PENDING)
+  notes         String?
+  createdBy     String?        // User ID who created
+  completedBy   String?        // User ID who completed/received
+  accountId     String
+  account       Account        @relation(fields: [accountId], references: [id])
+  items         StockTransferItem[]
+  createdAt     DateTime       @default(now())
+  completedAt   DateTime?
+}
+
+// Individual items in a transfer
+model StockTransferItem {
+  id          String        @id @default(cuid())
+  transferId  String
+  transfer    StockTransfer @relation(fields: [transferId], references: [id], onDelete: Cascade)
+  itemId      String
+  item        Item          @relation(fields: [itemId], references: [id])
+  quantity    Float
+}
+
+// ============================================
+// NOTIFICATIONS / ALERTS
+// ============================================
+
+// In-app notifications for alerts
+model Notification {
+  id        String   @id @default(cuid())
+  type      String   // "LOW_STOCK", "DISCREPANCY", "TRANSFER_PENDING", "COUNT_COMPLETED"
+  title     String
+  message   String
+  itemId    String?
+  storeId   String?
+  linkUrl   String?  // URL to navigate to when clicked
+  isRead    Boolean  @default(false)
+  userId    String?  // Target user (null = all users in account)
+  accountId String
+  account   Account  @relation(fields: [accountId], references: [id])
+  createdAt DateTime @default(now())
 }

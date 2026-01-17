@@ -18,5 +18,6 @@ export const config = {
     '/count/:path*',
     '/invoices/:path*',
     '/suppliers/:path*',
+    '/settings/:path*',
   ],
 };

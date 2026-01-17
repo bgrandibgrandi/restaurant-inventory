@@ -521,7 +521,7 @@ Respond in JSON format:
   }
 }
 
-// Confirm items and create stock entries
+// Confirm items and create stock entries + movements
 async function handleConfirmation(invoiceId: string, invoice: any, accountId: string) {
   // Get all pending items
   const items = await prisma.invoiceItem.findMany({
@@ -537,6 +537,7 @@ async function handleConfirmation(invoiceId: string, invoice: any, accountId: st
 
   const createdItems: any[] = [];
   const createdStockEntries: any[] = [];
+  const createdMovements: any[] = [];
 
   for (const item of items) {
     let itemId = item.matchedItemId;
@@ -593,8 +594,9 @@ async function handleConfirmation(invoiceId: string, invoice: any, accountId: st
       });
     }
 
-    // Create stock entry if we have an item
+    // Create stock entry and movement if we have an item
     if (itemId && item.quantity > 0) {
+      // Create stock entry (legacy)
       const stockEntry = await prisma.stockEntry.create({
         data: {
           itemId,
@@ -607,6 +609,22 @@ async function handleConfirmation(invoiceId: string, invoice: any, accountId: st
         },
       });
       createdStockEntries.push(stockEntry);
+
+      // Create stock movement for tracking
+      const movement = await prisma.stockMovement.create({
+        data: {
+          itemId,
+          storeId: invoice.storeId,
+          quantity: item.quantity, // Positive for purchase
+          type: 'PURCHASE',
+          referenceId: invoiceId,
+          referenceType: 'invoice',
+          costPrice: item.unitPrice,
+          notes: `Invoice: ${invoice.invoiceNumber || invoice.fileName}`,
+          accountId,
+        },
+      });
+      createdMovements.push(movement);
     }
   }
 
@@ -620,6 +638,7 @@ async function handleConfirmation(invoiceId: string, invoice: any, accountId: st
     success: true,
     createdItems: createdItems.length,
     createdStockEntries: createdStockEntries.length,
+    createdMovements: createdMovements.length,
   });
 }
 
