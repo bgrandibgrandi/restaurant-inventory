@@ -62,8 +62,9 @@ export async function GET(request: NextRequest) {
     if (!tokenResponse.ok) {
       const errorData = await tokenResponse.json();
       console.error('Square token exchange error:', errorData);
+      const errorMessage = errorData.message || errorData.error || 'Failed to exchange authorization code';
       return NextResponse.redirect(
-        new URL('/settings/integrations?error=Failed+to+exchange+authorization+code', request.url)
+        new URL(`/settings/integrations?error=${encodeURIComponent(errorMessage)}`, request.url)
       );
     }
 
