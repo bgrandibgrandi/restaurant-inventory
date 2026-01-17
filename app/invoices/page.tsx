@@ -24,15 +24,21 @@ type Invoice = {
   createdAt: string;
 };
 
+type UploadProgress = {
+  fileName: string;
+  status: 'uploading' | 'success' | 'error';
+  error?: string;
+};
+
 export default function InvoicesPage() {
   const router = useRouter();
   const [stores, setStores] = useState<Store[]>([]);
   const [invoices, setInvoices] = useState<Invoice[]>([]);
   const [loading, setLoading] = useState(true);
   const [uploading, setUploading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState<UploadProgress[]>([]);
   const [selectedStore, setSelectedStore] = useState('');
   const [dragActive, setDragActive] = useState(false);
-  const [driveAccessToken, setDriveAccessToken] = useState<string | null>(null);
 
   useEffect(() => {
     fetchData();
@@ -79,62 +85,112 @@ export default function InvoicesPage() {
       e.stopPropagation();
       setDragActive(false);
 
-      if (e.dataTransfer.files && e.dataTransfer.files[0]) {
-        await uploadFile(e.dataTransfer.files[0]);
+      if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+        await uploadFiles(Array.from(e.dataTransfer.files));
       }
     },
     [selectedStore]
   );
 
   const handleFileInput = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files && e.target.files[0]) {
-      await uploadFile(e.target.files[0]);
+    if (e.target.files && e.target.files.length > 0) {
+      await uploadFiles(Array.from(e.target.files));
+      // Reset input so same files can be selected again
+      e.target.value = '';
     }
   };
 
-  const uploadFile = async (file: File) => {
+  const validateFile = (file: File): string | null => {
+    const validTypes = ['image/jpeg', 'image/png', 'image/webp', 'application/pdf'];
+    if (!validTypes.includes(file.type)) {
+      return 'Invalid file type. Use PDF, JPG, PNG, or WebP.';
+    }
+    if (file.size > 10 * 1024 * 1024) {
+      return 'File too large. Max 10MB.';
+    }
+    return null;
+  };
+
+  const uploadFiles = async (files: File[]) => {
     if (!selectedStore) {
       alert('Please select a venue first');
       return;
     }
 
-    // Validate file type
-    const validTypes = ['image/jpeg', 'image/png', 'image/webp', 'application/pdf'];
-    if (!validTypes.includes(file.type)) {
-      alert('Please upload a PDF or image (JPG, PNG, WebP)');
-      return;
+    // Filter and validate files
+    const validFiles: File[] = [];
+    const initialProgress: UploadProgress[] = [];
+
+    for (const file of files) {
+      const error = validateFile(file);
+      if (error) {
+        initialProgress.push({ fileName: file.name, status: 'error', error });
+      } else {
+        validFiles.push(file);
+        initialProgress.push({ fileName: file.name, status: 'uploading' });
+      }
     }
 
-    // Check file size (max 10MB)
-    if (file.size > 10 * 1024 * 1024) {
-      alert('File size must be less than 10MB');
+    if (validFiles.length === 0) {
+      setUploadProgress(initialProgress);
       return;
     }
 
     setUploading(true);
-    try {
-      const formData = new FormData();
-      formData.append('file', file);
-      formData.append('storeId', selectedStore);
+    setUploadProgress(initialProgress);
 
-      const response = await fetch('/api/invoices', {
-        method: 'POST',
-        body: formData,
-      });
+    // Upload all files in parallel
+    const uploadPromises = validFiles.map(async (file) => {
+      try {
+        const formData = new FormData();
+        formData.append('file', file);
+        formData.append('storeId', selectedStore);
 
-      if (response.ok) {
-        const invoice = await response.json();
-        router.push(`/invoices/${invoice.id}`);
-      } else {
-        const error = await response.json();
-        alert(`Upload failed: ${error.error}`);
+        const response = await fetch('/api/invoices', {
+          method: 'POST',
+          body: formData,
+        });
+
+        if (response.ok) {
+          setUploadProgress(prev =>
+            prev.map(p =>
+              p.fileName === file.name ? { ...p, status: 'success' } : p
+            )
+          );
+          return { success: true, file };
+        } else {
+          const error = await response.json();
+          setUploadProgress(prev =>
+            prev.map(p =>
+              p.fileName === file.name
+                ? { ...p, status: 'error', error: error.error || 'Upload failed' }
+                : p
+            )
+          );
+          return { success: false, file };
+        }
+      } catch (error) {
+        setUploadProgress(prev =>
+          prev.map(p =>
+            p.fileName === file.name
+              ? { ...p, status: 'error', error: 'Upload failed' }
+              : p
+          )
+        );
+        return { success: false, file };
       }
-    } catch (error) {
-      console.error('Upload error:', error);
-      alert('Upload failed');
-    } finally {
-      setUploading(false);
-    }
+    });
+
+    await Promise.all(uploadPromises);
+    setUploading(false);
+
+    // Refresh invoices list
+    await fetchData();
+
+    // Clear progress after a delay
+    setTimeout(() => {
+      setUploadProgress([]);
+    }, 3000);
   };
 
   const handleGoogleDriveFile = async (file: { id: string; name: string; mimeType: string }) => {
@@ -260,6 +316,7 @@ export default function InvoicesPage() {
             <input
               type="file"
               accept="image/*,.pdf"
+              multiple
               onChange={handleFileInput}
               className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
               disabled={uploading}
@@ -278,14 +335,52 @@ export default function InvoicesPage() {
 
               <div>
                 <p className="text-lg font-medium text-gray-900">
-                  {uploading ? 'Uploading...' : 'Drop invoice here'}
+                  {uploading ? 'Uploading...' : 'Drop invoices here'}
                 </p>
                 <p className="text-sm text-gray-500 mt-1">
-                  or click to select a file (PDF, JPG, PNG)
+                  or click to select files (PDF, JPG, PNG) - multiple files supported
                 </p>
               </div>
             </div>
           </div>
+
+          {/* Upload Progress */}
+          {uploadProgress.length > 0 && (
+            <div className="mt-4 space-y-2">
+              {uploadProgress.map((progress, index) => (
+                <div
+                  key={index}
+                  className={`flex items-center justify-between p-3 rounded-lg ${
+                    progress.status === 'uploading'
+                      ? 'bg-blue-50'
+                      : progress.status === 'success'
+                      ? 'bg-green-50'
+                      : 'bg-red-50'
+                  }`}
+                >
+                  <div className="flex items-center gap-3 min-w-0">
+                    {progress.status === 'uploading' && (
+                      <div className="h-4 w-4 animate-spin rounded-full border-2 border-solid border-blue-600 border-r-transparent flex-shrink-0"></div>
+                    )}
+                    {progress.status === 'success' && (
+                      <svg className="w-4 h-4 text-green-600 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                      </svg>
+                    )}
+                    {progress.status === 'error' && (
+                      <svg className="w-4 h-4 text-red-600 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                      </svg>
+                    )}
+                    <span className="text-sm truncate">{progress.fileName}</span>
+                  </div>
+                  {progress.error && (
+                    <span className="text-xs text-red-600 ml-2 flex-shrink-0">{progress.error}</span>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
 
           {/* Divider */}
           <div className="relative my-6">
