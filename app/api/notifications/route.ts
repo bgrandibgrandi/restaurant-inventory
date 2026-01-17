@@ -3,7 +3,7 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/db';
 
-// Get notifications for the current user
+// GET - List notifications for the user
 export async function GET(request: NextRequest) {
   try {
     const session = await getServerSession(authOptions);
@@ -11,11 +11,11 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const searchParams = request.nextUrl.searchParams;
+    const { searchParams } = new URL(request.url);
     const unreadOnly = searchParams.get('unreadOnly') === 'true';
     const limit = parseInt(searchParams.get('limit') || '20');
 
-    const where: Record<string, unknown> = {
+    const where: any = {
       accountId: session.user.accountId,
       OR: [
         { userId: session.user.id },
@@ -35,12 +35,8 @@ export async function GET(request: NextRequest) {
       }),
       prisma.notification.count({
         where: {
-          accountId: session.user.accountId,
+          ...where,
           isRead: false,
-          OR: [
-            { userId: session.user.id },
-            { userId: null },
-          ],
         },
       }),
     ]);
@@ -58,7 +54,7 @@ export async function GET(request: NextRequest) {
   }
 }
 
-// Create a notification (internal use / system generated)
+// POST - Create a notification (internal use)
 export async function POST(request: NextRequest) {
   try {
     const session = await getServerSession(authOptions);
@@ -66,8 +62,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const body = await request.json();
-    const { type, title, message, itemId, storeId, linkUrl, userId } = body;
+    const { type, title, message, itemId, storeId, linkUrl, userId } = await request.json();
 
     if (!type || !title || !message) {
       return NextResponse.json(
@@ -81,15 +76,15 @@ export async function POST(request: NextRequest) {
         type,
         title,
         message,
-        itemId: itemId || null,
-        storeId: storeId || null,
-        linkUrl: linkUrl || null,
-        userId: userId || null, // null = all users in account
+        itemId,
+        storeId,
+        linkUrl,
+        userId,
         accountId: session.user.accountId,
       },
     });
 
-    return NextResponse.json(notification, { status: 201 });
+    return NextResponse.json(notification);
   } catch (error) {
     console.error('Error creating notification:', error);
     return NextResponse.json(
@@ -99,34 +94,39 @@ export async function POST(request: NextRequest) {
   }
 }
 
-// Mark all notifications as read
-export async function PUT(request: NextRequest) {
+// PATCH - Mark notifications as read
+export async function PATCH(request: NextRequest) {
   try {
     const session = await getServerSession(authOptions);
     if (!session?.user?.accountId) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const body = await request.json();
-    const { action } = body;
+    const { notificationIds, markAllRead } = await request.json();
 
-    if (action === 'mark_all_read') {
+    if (markAllRead) {
       await prisma.notification.updateMany({
         where: {
           accountId: session.user.accountId,
-          isRead: false,
           OR: [
             { userId: session.user.id },
             { userId: null },
           ],
+          isRead: false,
         },
         data: { isRead: true },
       });
-
-      return NextResponse.json({ success: true });
+    } else if (notificationIds && Array.isArray(notificationIds)) {
+      await prisma.notification.updateMany({
+        where: {
+          id: { in: notificationIds },
+          accountId: session.user.accountId,
+        },
+        data: { isRead: true },
+      });
     }
 
-    return NextResponse.json({ error: 'Invalid action' }, { status: 400 });
+    return NextResponse.json({ success: true });
   } catch (error) {
     console.error('Error updating notifications:', error);
     return NextResponse.json(
