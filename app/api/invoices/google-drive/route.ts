@@ -14,9 +14,9 @@ export async function POST(request: NextRequest) {
     const body = await request.json();
     const { fileId, fileName, mimeType, accessToken, storeId } = body;
 
-    if (!fileId || !accessToken || !storeId) {
+    if (!fileId || !storeId) {
       return NextResponse.json(
-        { error: 'File ID, access token, and store ID are required' },
+        { error: 'File ID and store ID are required' },
         { status: 400 }
       );
     }
@@ -30,25 +30,62 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Store not found' }, { status: 404 });
     }
 
-    // Download file from Google Drive
-    const driveResponse = await fetch(
-      `https://www.googleapis.com/drive/v3/files/${fileId}?alt=media`,
-      {
-        headers: {
-          Authorization: `Bearer ${accessToken}`,
-        },
+    let driveResponse: Response;
+    let fileBuffer: ArrayBuffer;
+
+    // Try with access token if provided, otherwise try public download
+    if (accessToken) {
+      // Authenticated download via Drive API
+      driveResponse = await fetch(
+        `https://www.googleapis.com/drive/v3/files/${fileId}?alt=media`,
+        {
+          headers: {
+            Authorization: `Bearer ${accessToken}`,
+          },
+        }
+      );
+    } else {
+      // Public download - file must be shared with "Anyone with the link"
+      // Try the direct download URL first
+      driveResponse = await fetch(
+        `https://drive.google.com/uc?export=download&id=${fileId}`,
+        {
+          redirect: 'follow',
+        }
+      );
+
+      // If we get an HTML page (virus scan warning for large files), try alternate method
+      const contentType = driveResponse.headers.get('content-type') || '';
+      if (contentType.includes('text/html')) {
+        // Try the alternate export URL
+        driveResponse = await fetch(
+          `https://www.googleapis.com/drive/v3/files/${fileId}?alt=media&key=${process.env.NEXT_PUBLIC_GOOGLE_API_KEY}`,
+          {
+            redirect: 'follow',
+          }
+        );
       }
-    );
+    }
 
     if (!driveResponse.ok) {
-      console.error('Google Drive error:', await driveResponse.text());
+      const errorText = await driveResponse.text();
+      console.error('Google Drive error:', errorText);
+
+      // Check if it's a permissions error
+      if (driveResponse.status === 403 || driveResponse.status === 404) {
+        return NextResponse.json(
+          { error: 'Cannot access file. Make sure the file is shared with "Anyone with the link".' },
+          { status: 400 }
+        );
+      }
+
       return NextResponse.json(
         { error: 'Failed to download file from Google Drive' },
         { status: 500 }
       );
     }
 
-    const fileBuffer = await driveResponse.arrayBuffer();
+    fileBuffer = await driveResponse.arrayBuffer();
 
     // Determine file extension
     let extension = '.pdf';
