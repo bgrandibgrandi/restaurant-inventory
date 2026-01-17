@@ -31,6 +31,12 @@ export async function GET(
             item: {
               include: {
                 category: true,
+                supplier: {
+                  select: {
+                    id: true,
+                    name: true,
+                  },
+                },
               },
             },
           },
