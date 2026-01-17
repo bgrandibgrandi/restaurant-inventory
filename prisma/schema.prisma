@@ -70,14 +70,21 @@ model Item {
   name          String
   description   String?
   invoiceItems  InvoiceItem[]
-  unit         String       // kg, L, pieces, etc.
-  categoryId   String?
-  category     Category?    @relation(fields: [categoryId], references: [id])
-  accountId    String
-  account      Account      @relation(fields: [accountId], references: [id])
-  stockEntries StockEntry[]
-  createdAt    DateTime     @default(now())
-  updatedAt    DateTime     @updatedAt
+  unit          String        // kg, L, pieces, etc.
+  categoryId    String?
+  category      Category?     @relation(fields: [categoryId], references: [id])
+  supplierId    String?
+  supplier      Supplier?     @relation(fields: [supplierId], references: [id])
+  accountId     String
+  account       Account       @relation(fields: [accountId], references: [id])
+  stockEntries  StockEntry[]
+  minStockLevel Float?        // Optional minimum stock alert level
+  maxStockLevel Float?        // Optional maximum stock level
+  sku           String?       // Optional SKU/product code
+  barcode       String?       // Optional barcode
+  costPrice     Float?        // Default cost price
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
 }
 
 // Reusable Categories
@@ -144,8 +151,11 @@ model Supplier {
   accountId String
   account   Account   @relation(fields: [accountId], references: [id])
   invoices  Invoice[]
+  items     Item[]
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
+
+  @@unique([name, accountId]) // Prevent duplicate suppliers with same name per account
 }
 
 // Invoice import for tracking purchases

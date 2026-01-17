@@ -17,5 +17,6 @@ export const config = {
     '/roles/:path*',
     '/count/:path*',
     '/invoices/:path*',
+    '/suppliers/:path*',
   ],
 };

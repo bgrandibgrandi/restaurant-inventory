@@ -294,11 +294,40 @@ Respond in JSON format:
 
     const extractedData = JSON.parse(jsonStr.trim());
 
-    // Update invoice with extracted metadata
+    // Try to match or create supplier
+    let supplierId: string | null = null;
+    if (extractedData.supplierName) {
+      // First, try to find existing supplier (case-insensitive)
+      const existingSupplier = await prisma.supplier.findFirst({
+        where: {
+          accountId,
+          name: {
+            equals: extractedData.supplierName.trim(),
+            mode: 'insensitive',
+          },
+        },
+      });
+
+      if (existingSupplier) {
+        supplierId = existingSupplier.id;
+      } else {
+        // Create new supplier
+        const newSupplier = await prisma.supplier.create({
+          data: {
+            name: extractedData.supplierName.trim(),
+            accountId,
+          },
+        });
+        supplierId = newSupplier.id;
+      }
+    }
+
+    // Update invoice with extracted metadata and linked supplier
     await prisma.invoice.update({
       where: { id: invoiceId },
       data: {
         supplierName: extractedData.supplierName,
+        supplierId,
         invoiceNumber: extractedData.invoiceNumber,
         invoiceDate: extractedData.invoiceDate ? new Date(extractedData.invoiceDate) : null,
         totalAmount: extractedData.totalAmount,
@@ -407,6 +436,8 @@ async function handleConfirmation(invoiceId: string, invoice: any, accountId: st
           name: item.suggestedName,
           unit: item.suggestedUnit || item.unit || 'pieces',
           categoryId: item.categoryId,
+          supplierId: invoice.supplierId, // Link to invoice supplier
+          costPrice: item.unitPrice, // Set default cost price from invoice
           accountId,
         },
       });

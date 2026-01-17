@@ -11,6 +11,7 @@ export async function GET(
       where: { id },
       include: {
         category: true,
+        supplier: true,
       },
     });
 
@@ -35,15 +36,36 @@ export async function PUT(
   try {
     const { id } = await params;
     const body = await request.json();
-    const { name, description, unit, categoryId } = body;
+    const {
+      name,
+      description,
+      unit,
+      categoryId,
+      supplierId,
+      sku,
+      barcode,
+      minStockLevel,
+      maxStockLevel,
+      costPrice,
+    } = body;
 
     const item = await prisma.item.update({
       where: { id },
       data: {
         name,
-        description,
+        description: description || null,
         unit,
         categoryId: categoryId || null,
+        supplierId: supplierId || null,
+        sku: sku || null,
+        barcode: barcode || null,
+        minStockLevel: minStockLevel !== undefined ? minStockLevel : undefined,
+        maxStockLevel: maxStockLevel !== undefined ? maxStockLevel : undefined,
+        costPrice: costPrice !== undefined ? costPrice : undefined,
+      },
+      include: {
+        category: true,
+        supplier: true,
       },
     });
 
