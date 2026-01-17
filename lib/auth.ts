@@ -11,16 +11,23 @@ export const authOptions: NextAuthOptions = {
   ],
   callbacks: {
     async signIn({ user, account, profile }) {
-      if (!user.email) return false;
+      console.log('[Auth] signIn callback started for:', user.email);
+
+      if (!user.email) {
+        console.error('[Auth] No email provided');
+        return false;
+      }
 
       try {
         // Check if user exists (either they signed up before or were invited)
+        console.log('[Auth] Checking for existing user...');
         let dbUser = await prisma.user.findUnique({
           where: { email: user.email },
           include: { account: true },
         });
 
         if (dbUser) {
+          console.log('[Auth] User found, updating profile...');
           // User exists - update their profile info from Google if needed
           await prisma.user.update({
             where: { id: dbUser.id },
@@ -29,7 +36,9 @@ export const authOptions: NextAuthOptions = {
               image: user.image || dbUser.image,
             },
           });
+          console.log('[Auth] Profile updated successfully');
         } else {
+          console.log('[Auth] New user, creating account...');
           // New user - create account and user
           const newAccount = await prisma.account.create({
             data: {
@@ -37,6 +46,7 @@ export const authOptions: NextAuthOptions = {
               baseCurrency: 'EUR',
             },
           });
+          console.log('[Auth] Account created:', newAccount.id);
 
           dbUser = await prisma.user.create({
             data: {
@@ -47,11 +57,14 @@ export const authOptions: NextAuthOptions = {
             },
             include: { account: true },
           });
+          console.log('[Auth] User created:', dbUser.id);
         }
 
+        console.log('[Auth] signIn successful');
         return true;
       } catch (error) {
-        console.error('Error in signIn callback:', error);
+        console.error('[Auth] Error in signIn callback:', error);
+        console.error('[Auth] Error details:', JSON.stringify(error, Object.getOwnPropertyNames(error)));
         return false;
       }
     },
