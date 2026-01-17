@@ -33,6 +33,7 @@ type InvoiceItem = {
   matchedItemId: string | null;
   category: Category | null;
   categoryId: string | null;
+  suggestedCategoryName: string | null;
   status: string;
 };
 
@@ -255,6 +256,25 @@ export default function InvoiceDetailPage() {
     setSupplierDialogType(null);
     setPendingSupplierName(null);
     setSuggestedSupplierMatch(null);
+  };
+
+  const handleCreateCategory = async (name: string): Promise<Category | null> => {
+    try {
+      const response = await fetch('/api/categories', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name }),
+      });
+
+      if (response.ok) {
+        const newCategory = await response.json();
+        setCategories((prev) => [...prev, newCategory]);
+        return newCategory;
+      }
+    } catch (error) {
+      console.error('Error creating category:', error);
+    }
+    return null;
   };
 
   const handleUpdateItem = async (itemId: string, updates: Partial<InvoiceItem>) => {
@@ -671,6 +691,7 @@ export default function InvoiceDetailPage() {
                   onCancelEdit={() => setEditingItem(null)}
                   onUpdate={(updates) => handleUpdateItem(item.id, updates)}
                   onSkip={() => handleSkipItem(item.id)}
+                  onCreateCategory={handleCreateCategory}
                 />
               ))}
             </div>
@@ -756,6 +777,7 @@ function InvoiceItemCard({
   onCancelEdit,
   onUpdate,
   onSkip,
+  onCreateCategory,
 }: {
   item: InvoiceItem;
   categories: Category[];
@@ -765,6 +787,7 @@ function InvoiceItemCard({
   onCancelEdit: () => void;
   onUpdate: (updates: Partial<InvoiceItem>) => void;
   onSkip: () => void;
+  onCreateCategory: (name: string) => Promise<Category | null>;
 }) {
   const [editData, setEditData] = useState({
     suggestedName: item.suggestedName || item.rawName,
@@ -774,9 +797,24 @@ function InvoiceItemCard({
     quantity: item.quantity.toString(),
     unitPrice: item.unitPrice?.toString() || '',
   });
+  const [showNewCategory, setShowNewCategory] = useState(false);
+  const [newCategoryName, setNewCategoryName] = useState(item.suggestedCategoryName || '');
+  const [creatingCategory, setCreatingCategory] = useState(false);
 
   const isSkipped = item.status === 'skipped';
   const isConfirmed = item.status === 'confirmed' || item.status === 'created';
+
+  const handleCreateCategory = async () => {
+    if (!newCategoryName.trim()) return;
+    setCreatingCategory(true);
+    const newCategory = await onCreateCategory(newCategoryName.trim());
+    if (newCategory) {
+      setEditData({ ...editData, categoryId: newCategory.id });
+      setShowNewCategory(false);
+      setNewCategoryName('');
+    }
+    setCreatingCategory(false);
+  };
 
   if (isEditing) {
     return (
@@ -836,7 +874,14 @@ function InvoiceItemCard({
               <label className="block text-xs font-medium text-gray-700 mb-1">Category</label>
               <select
                 value={editData.categoryId}
-                onChange={(e) => setEditData({ ...editData, categoryId: e.target.value })}
+                onChange={(e) => {
+                  if (e.target.value === '__new__') {
+                    setShowNewCategory(true);
+                    setNewCategoryName(item.suggestedCategoryName || '');
+                  } else {
+                    setEditData({ ...editData, categoryId: e.target.value });
+                  }
+                }}
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
               >
                 <option value="">No category</option>
@@ -845,7 +890,46 @@ function InvoiceItemCard({
                     {cat.name}
                   </option>
                 ))}
+                <option value="__new__">+ Create new category</option>
               </select>
+              {item.suggestedCategoryName && !editData.categoryId && (
+                <p className="mt-1 text-xs text-blue-600">
+                  Suggested: {item.suggestedCategoryName}
+                </p>
+              )}
+              {showNewCategory && (
+                <div className="mt-2 flex gap-2">
+                  <input
+                    type="text"
+                    value={newCategoryName}
+                    onChange={(e) => setNewCategoryName(e.target.value)}
+                    placeholder="Category name..."
+                    className="flex-1 px-3 py-2 border border-gray-300 rounded-lg text-sm"
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        e.preventDefault();
+                        handleCreateCategory();
+                      } else if (e.key === 'Escape') {
+                        setShowNewCategory(false);
+                      }
+                    }}
+                    autoFocus
+                  />
+                  <button
+                    onClick={handleCreateCategory}
+                    disabled={creatingCategory || !newCategoryName.trim()}
+                    className="px-3 py-2 bg-green-600 text-white rounded-lg text-sm disabled:opacity-50"
+                  >
+                    {creatingCategory ? '...' : 'Add'}
+                  </button>
+                  <button
+                    onClick={() => setShowNewCategory(false)}
+                    className="px-3 py-2 bg-gray-200 text-gray-700 rounded-lg text-sm"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              )}
             </div>
           </div>
 
@@ -942,13 +1026,17 @@ function InvoiceItemCard({
               </span>
             )}
           </div>
-          {item.category && (
-            <div className="mt-1">
+          <div className="mt-1 flex items-center gap-2">
+            {item.category ? (
               <span className="text-xs px-2 py-0.5 bg-blue-100 text-blue-700 rounded-full">
                 {item.category.name}
               </span>
-            </div>
-          )}
+            ) : item.suggestedCategoryName ? (
+              <span className="text-xs px-2 py-0.5 bg-yellow-100 text-yellow-700 rounded-full">
+                Suggested: {item.suggestedCategoryName}
+              </span>
+            ) : null}
+          </div>
         </div>
 
         {!isSkipped && !isConfirmed && (

@@ -248,16 +248,17 @@ Also extract if visible:
 - totalAmount: Total invoice amount
 
 Here are existing items in the system that you should try to match:
-${existingItems.map(i => `- "${i.name}" (${i.unit})`).join('\n')}
+${existingItems.map(i => `- "${i.name}" (${i.unit})`).join('\n') || '(No existing items yet)'}
 
-Here are existing categories:
-${categories.map(c => `- "${c.name}" (id: ${c.id})`).join('\n')}
+Here are existing categories in the system:
+${categories.map(c => `- "${c.name}" (id: ${c.id})`).join('\n') || '(No existing categories yet)'}
 
 For each item, also suggest:
 - suggestedName: A clean, standardized name for this item (e.g., "Chicken Breast" instead of "CHKN BRST 5KG")
 - suggestedUnit: The appropriate unit (kg, L, pieces, boxes, etc.)
 - matchedItemName: If this matches an existing item from the list above, provide the exact name
-- categoryName: Suggest a category from the list above, or suggest a new one
+- categoryId: If the item fits an existing category from the list above, provide the category ID (the value in parentheses). Set to null if no existing category fits.
+- suggestedCategoryName: ALWAYS suggest a category name for this item based on what type of product it is. Use an existing category name if it fits, otherwise suggest a new descriptive category name. Common restaurant categories include: Proteins, Meat, Poultry, Seafood, Dairy, Produce, Vegetables, Fruits, Beverages, Alcohol, Wine, Beer, Spirits, Dry Goods, Pantry, Spices, Oils, Sauces, Bread, Bakery, Frozen, Cleaning, Supplies, Packaging, etc.
 
 Respond in JSON format:
 {
@@ -275,7 +276,8 @@ Respond in JSON format:
       "suggestedName": "string",
       "suggestedUnit": "string",
       "matchedItemName": "string or null",
-      "categoryName": "string or null"
+      "categoryId": "string or null",
+      "suggestedCategoryName": "string"
     }
   ]
 }`;
@@ -421,14 +423,31 @@ Respond in JSON format:
         }
       }
 
-      // Try to match category
-      let categoryId = null;
-      if (item.categoryName) {
+      // Try to match category - first use direct categoryId if provided, then try name match
+      let categoryId: string | null = item.categoryId || null;
+      let suggestedCategoryName: string | null = item.suggestedCategoryName || null;
+
+      // If no direct categoryId but we have a suggested name, try to match it
+      if (!categoryId && suggestedCategoryName) {
+        const matchedCategory = categories.find(
+          c => c.name.toLowerCase() === suggestedCategoryName!.toLowerCase()
+        );
+        if (matchedCategory) {
+          categoryId = matchedCategory.id;
+        }
+      }
+
+      // Fallback to old categoryName field for backwards compatibility
+      if (!categoryId && item.categoryName) {
         const matchedCategory = categories.find(
           c => c.name.toLowerCase() === item.categoryName.toLowerCase()
         );
         if (matchedCategory) {
           categoryId = matchedCategory.id;
+        }
+        // Use categoryName as suggested name if we don't have one
+        if (!suggestedCategoryName) {
+          suggestedCategoryName = item.categoryName;
         }
       }
 
@@ -451,6 +470,7 @@ Respond in JSON format:
           suggestedUnit: item.suggestedUnit,
           matchedItemId,
           categoryId,
+          suggestedCategoryName: suggestedCategoryName,
           status: 'pending',
         },
       });
