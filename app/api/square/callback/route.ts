@@ -62,16 +62,29 @@ export async function GET(request: NextRequest) {
     if (!tokenResponse.ok) {
       const errorData = await tokenResponse.json();
       console.error('Square token exchange error:', JSON.stringify(errorData, null, 2));
-      console.error('Request details:', {
-        url: `${baseUrl}/oauth2/token`,
+
+      // Log detailed debug info
+      const debugInfo = {
+        status: tokenResponse.status,
+        statusText: tokenResponse.statusText,
+        errorData,
         client_id: process.env.SQUARE_APPLICATION_ID,
+        client_secret_length: process.env.SQUARE_APPLICATION_SECRET?.length,
         client_secret_prefix: process.env.SQUARE_APPLICATION_SECRET?.substring(0, 10),
-        redirect_uri: `${process.env.NEXTAUTH_URL}/api/square/callback`,
-      });
+        client_secret_suffix: process.env.SQUARE_APPLICATION_SECRET?.substring(-6),
+        code_length: code?.length,
+        baseUrl,
+      };
+      console.error('Debug info:', JSON.stringify(debugInfo, null, 2));
+
       // Extract error from Square's error format
       const squareError = errorData.errors?.[0]?.detail || errorData.message || errorData.error || 'Failed to exchange authorization code';
+      const errorCode = errorData.errors?.[0]?.code || errorData.type || 'UNKNOWN';
+
+      // Include error code for better debugging
+      const fullError = `${squareError} (${errorCode})`;
       return NextResponse.redirect(
-        new URL(`/settings/integrations?error=${encodeURIComponent(squareError)}`, request.url)
+        new URL(`/settings/integrations?error=${encodeURIComponent(fullError)}`, request.url)
       );
     }
 
