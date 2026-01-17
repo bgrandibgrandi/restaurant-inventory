@@ -4,7 +4,7 @@ import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/db';
 import { MovementType } from '@prisma/client';
 
-// Get stock movements with filters
+// GET - List movements with filters
 export async function GET(request: NextRequest) {
   try {
     const session = await getServerSession(authOptions);
@@ -12,52 +12,34 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const searchParams = request.nextUrl.searchParams;
+    const { searchParams } = new URL(request.url);
     const storeId = searchParams.get('storeId');
     const itemId = searchParams.get('itemId');
     const type = searchParams.get('type') as MovementType | null;
     const startDate = searchParams.get('startDate');
     const endDate = searchParams.get('endDate');
-    const limit = parseInt(searchParams.get('limit') || '50');
+    const limit = parseInt(searchParams.get('limit') || '100');
     const offset = parseInt(searchParams.get('offset') || '0');
 
-    const where: Record<string, unknown> = {
+    const where: any = {
       accountId: session.user.accountId,
     };
 
     if (storeId) where.storeId = storeId;
     if (itemId) where.itemId = itemId;
     if (type) where.type = type;
-
     if (startDate || endDate) {
       where.createdAt = {};
-      if (startDate) (where.createdAt as Record<string, Date>).gte = new Date(startDate);
-      if (endDate) (where.createdAt as Record<string, Date>).lte = new Date(endDate);
+      if (startDate) where.createdAt.gte = new Date(startDate);
+      if (endDate) where.createdAt.lte = new Date(endDate);
     }
 
     const [movements, total] = await Promise.all([
       prisma.stockMovement.findMany({
         where,
         include: {
-          item: {
-            select: {
-              id: true,
-              name: true,
-              unit: true,
-              category: {
-                select: {
-                  id: true,
-                  name: true,
-                },
-              },
-            },
-          },
-          store: {
-            select: {
-              id: true,
-              name: true,
-            },
-          },
+          item: { select: { id: true, name: true, unit: true } },
+          store: { select: { id: true, name: true } },
         },
         orderBy: { createdAt: 'desc' },
         take: limit,
@@ -73,15 +55,15 @@ export async function GET(request: NextRequest) {
       offset,
     });
   } catch (error) {
-    console.error('Error fetching stock movements:', error);
+    console.error('Error fetching movements:', error);
     return NextResponse.json(
-      { error: 'Failed to fetch stock movements' },
+      { error: 'Failed to fetch movements' },
       { status: 500 }
     );
   }
 }
 
-// Create a new stock movement (manual entry)
+// POST - Create a manual movement (purchase, waste, adjustment)
 export async function POST(request: NextRequest) {
   try {
     const session = await getServerSession(authOptions);
@@ -89,8 +71,17 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const body = await request.json();
-    const { itemId, storeId, quantity, type, reason, notes, costPrice } = body;
+    const {
+      itemId,
+      storeId,
+      quantity,
+      type,
+      reason,
+      notes,
+      costPrice,
+      referenceId,
+      referenceType,
+    } = await request.json();
 
     // Validate required fields
     if (!itemId || !storeId || quantity === undefined || !type) {
@@ -100,43 +91,31 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Validate type
-    const validTypes: MovementType[] = ['PURCHASE', 'WASTE', 'ADJUSTMENT', 'SALE'];
-    if (!validTypes.includes(type)) {
-      return NextResponse.json(
-        { error: `Invalid movement type. Must be one of: ${validTypes.join(', ')}` },
-        { status: 400 }
-      );
-    }
-
-    // Verify item belongs to account
+    // Validate item exists and belongs to account
     const item = await prisma.item.findFirst({
-      where: {
-        id: itemId,
-        accountId: session.user.accountId,
-      },
+      where: { id: itemId, accountId: session.user.accountId },
     });
 
     if (!item) {
       return NextResponse.json({ error: 'Item not found' }, { status: 404 });
     }
 
-    // Verify store belongs to account
+    // Validate store exists and belongs to account
     const store = await prisma.store.findFirst({
-      where: {
-        id: storeId,
-        accountId: session.user.accountId,
-      },
+      where: { id: storeId, accountId: session.user.accountId },
     });
 
     if (!store) {
       return NextResponse.json({ error: 'Store not found' }, { status: 404 });
     }
 
-    // Determine quantity sign based on movement type
+    // Ensure quantity sign matches movement type
     let adjustedQuantity = Math.abs(quantity);
-    if (type === 'WASTE' || type === 'SALE') {
+    if (type === 'WASTE' || type === 'TRANSFER_OUT' || type === 'SALE') {
       adjustedQuantity = -adjustedQuantity;
+    } else if (type === 'ADJUSTMENT') {
+      // Adjustments can be positive or negative
+      adjustedQuantity = quantity;
     }
 
     const movement = await prisma.stockMovement.create({
@@ -145,35 +124,25 @@ export async function POST(request: NextRequest) {
         storeId,
         quantity: adjustedQuantity,
         type,
-        reason: reason || null,
-        notes: notes || null,
-        referenceType: 'manual',
-        costPrice: costPrice || item.costPrice || null,
+        reason,
+        notes,
+        costPrice: costPrice || item.costPrice,
+        referenceId,
+        referenceType: referenceType || 'manual',
         createdBy: session.user.id,
         accountId: session.user.accountId,
       },
       include: {
-        item: {
-          select: {
-            id: true,
-            name: true,
-            unit: true,
-          },
-        },
-        store: {
-          select: {
-            id: true,
-            name: true,
-          },
-        },
+        item: { select: { id: true, name: true, unit: true } },
+        store: { select: { id: true, name: true } },
       },
     });
 
-    return NextResponse.json(movement, { status: 201 });
+    return NextResponse.json(movement);
   } catch (error) {
-    console.error('Error creating stock movement:', error);
+    console.error('Error creating movement:', error);
     return NextResponse.json(
-      { error: 'Failed to create stock movement' },
+      { error: 'Failed to create movement' },
       { status: 500 }
     );
   }

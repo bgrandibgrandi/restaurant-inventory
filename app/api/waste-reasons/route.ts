@@ -3,17 +3,18 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/db';
 
-// Default waste reasons to seed for new accounts
 const DEFAULT_WASTE_REASONS = [
   { name: 'Expired', description: 'Product passed expiration date' },
-  { name: 'Damaged', description: 'Physical damage to product' },
+  { name: 'Damaged', description: 'Product damaged in storage or handling' },
   { name: 'Spillage', description: 'Accidental spill or breakage' },
-  { name: 'Preparation Loss', description: 'Normal loss during food preparation' },
-  { name: 'Quality Issue', description: 'Product quality not acceptable' },
+  { name: 'Preparation Loss', description: 'Normal loss during food preparation (trimmings, peels, etc.)' },
+  { name: 'Staff Meal', description: 'Used for staff meals' },
+  { name: 'Customer Complaint', description: 'Returned or remade due to customer complaint' },
+  { name: 'Quality Issue', description: 'Did not meet quality standards' },
   { name: 'Other', description: 'Other reason (specify in notes)' },
 ];
 
-// Get all waste reasons
+// GET - List all waste reasons for the account
 export async function GET() {
   try {
     const session = await getServerSession(authOptions);
@@ -21,28 +22,28 @@ export async function GET() {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    let reasons = await prisma.wasteReason.findMany({
+    const reasons = await prisma.wasteReason.findMany({
       where: {
         accountId: session.user.accountId,
+        isActive: true,
       },
       orderBy: { name: 'asc' },
     });
 
     // If no reasons exist, create defaults
     if (reasons.length === 0) {
-      await prisma.wasteReason.createMany({
-        data: DEFAULT_WASTE_REASONS.map((r) => ({
-          ...r,
-          accountId: session.user.accountId,
-        })),
-      });
-
-      reasons = await prisma.wasteReason.findMany({
-        where: {
-          accountId: session.user.accountId,
-        },
-        orderBy: { name: 'asc' },
-      });
+      const createdReasons = [];
+      for (const reason of DEFAULT_WASTE_REASONS) {
+        const created = await prisma.wasteReason.create({
+          data: {
+            name: reason.name,
+            description: reason.description,
+            accountId: session.user.accountId,
+          },
+        });
+        createdReasons.push(created);
+      }
+      return NextResponse.json(createdReasons);
     }
 
     return NextResponse.json(reasons);
@@ -55,7 +56,7 @@ export async function GET() {
   }
 }
 
-// Create a new waste reason
+// POST - Create a new waste reason
 export async function POST(request: NextRequest) {
   try {
     const session = await getServerSession(authOptions);
@@ -63,17 +64,16 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const body = await request.json();
-    const { name, description } = body;
+    const { name, description } = await request.json();
 
     if (!name) {
       return NextResponse.json({ error: 'Name is required' }, { status: 400 });
     }
 
-    // Check for duplicate name
+    // Check for duplicate
     const existing = await prisma.wasteReason.findFirst({
       where: {
-        name,
+        name: { equals: name, mode: 'insensitive' },
         accountId: session.user.accountId,
       },
     });
@@ -88,12 +88,12 @@ export async function POST(request: NextRequest) {
     const reason = await prisma.wasteReason.create({
       data: {
         name,
-        description: description || null,
+        description,
         accountId: session.user.accountId,
       },
     });
 
-    return NextResponse.json(reason, { status: 201 });
+    return NextResponse.json(reason);
   } catch (error) {
     console.error('Error creating waste reason:', error);
     return NextResponse.json(
