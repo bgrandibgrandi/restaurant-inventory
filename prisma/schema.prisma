@@ -28,12 +28,12 @@ model Account {
   stockTransfers  StockTransfer[]
   notifications   Notification[]
   // Recipe & Square integration
-  recipes               Recipe[]
-  squareConnection      SquareConnection?
-  squareCatalogItems    SquareCatalogItem[]
-  squareItemMappings    SquareItemMapping[]
+  recipes                Recipe[]
+  squareConnections      SquareConnection[]
+  squareCatalogItems     SquareCatalogItem[]
+  squareItemMappings     SquareItemMapping[]
   squareModifierMappings SquareModifierMapping[]
-  squareOrderSyncs      SquareOrderSync[]
+  squareOrderSyncs       SquareOrderSync[]
 }
 
 model Role {
@@ -64,18 +64,19 @@ model User {
 }
 
 model Store {
-  id              String          @id @default(cuid())
-  name            String
-  address         String?
-  accountId       String
-  account         Account         @relation(fields: [accountId], references: [id])
-  stockEntries    StockEntry[]
-  stockCounts     StockCount[]
-  invoices        Invoice[]
-  stockMovements  StockMovement[]
-  transfersFrom   StockTransfer[] @relation("TransferFrom")
-  transfersTo     StockTransfer[] @relation("TransferTo")
-  createdAt       DateTime        @default(now())
+  id               String            @id @default(cuid())
+  name             String
+  address          String?
+  accountId        String
+  account          Account           @relation(fields: [accountId], references: [id])
+  stockEntries     StockEntry[]
+  stockCounts      StockCount[]
+  invoices         Invoice[]
+  stockMovements   StockMovement[]
+  transfersFrom    StockTransfer[]   @relation("TransferFrom")
+  transfersTo      StockTransfer[]   @relation("TransferTo")
+  squareConnection SquareConnection? // Each store can have its own Square account
+  createdAt        DateTime          @default(now())
 }
 
 // Reusable Item Master (like a product catalog)
@@ -393,39 +394,47 @@ model RecipeIngredient {
 // SQUARE POS INTEGRATION
 // ============================================
 
-// Square OAuth connection per account
+// Square OAuth connection - one per store (supports different Square accounts per location)
 model SquareConnection {
-  id                String   @id @default(cuid())
-  accountId         String   @unique
-  account           Account  @relation(fields: [accountId], references: [id])
-  merchantId        String   // Square merchant ID
-  accessToken       String   // Encrypted access token
-  refreshToken      String?  // Encrypted refresh token
+  id                String              @id @default(cuid())
+  storeId           String              @unique  // Each store can have its own Square connection
+  store             Store               @relation(fields: [storeId], references: [id])
+  accountId         String
+  account           Account             @relation(fields: [accountId], references: [id])
+  name              String?             // Friendly name like "Downtown Square Account"
+  merchantId        String              // Square merchant ID
+  accessToken       String              // Encrypted access token
+  refreshToken      String?             // Encrypted refresh token
   tokenExpiresAt    DateTime?
-  locationIds       String?  // JSON array of Square location IDs to sync
-  lastSyncAt        DateTime?
-  syncEnabled       Boolean  @default(true)
-  createdAt         DateTime @default(now())
-  updatedAt         DateTime @updatedAt
+  squareLocationId  String?             // Specific Square location to sync (if merchant has multiple)
+  lastCatalogSync   DateTime?
+  lastOrderSync     DateTime?
+  syncEnabled       Boolean             @default(true)
+  catalogItems      SquareCatalogItem[]
+  orderSyncs        SquareOrderSync[]
+  createdAt         DateTime            @default(now())
+  updatedAt         DateTime            @updatedAt
 }
 
 // Synced Square catalog items
 model SquareCatalogItem {
-  id                String              @id @default(cuid())
-  squareId          String              // Square's object ID
-  accountId         String
-  account           Account             @relation(fields: [accountId], references: [id])
-  name              String
-  description       String?
-  categoryName      String?             // Square category
-  variations        SquareItemVariation[]
-  modifiers         SquareModifier[]
-  mappings          SquareItemMapping[]
-  isActive          Boolean             @default(true)
-  lastSyncedAt      DateTime            @default(now())
-  createdAt         DateTime            @default(now())
+  id                  String              @id @default(cuid())
+  squareId            String              // Square's object ID
+  squareConnectionId  String              // Which Square connection this came from
+  squareConnection    SquareConnection    @relation(fields: [squareConnectionId], references: [id], onDelete: Cascade)
+  accountId           String
+  account             Account             @relation(fields: [accountId], references: [id])
+  name                String
+  description         String?
+  categoryName        String?             // Square category
+  variations          SquareItemVariation[]
+  modifiers           SquareModifier[]
+  mappings            SquareItemMapping[]
+  isActive            Boolean             @default(true)
+  lastSyncedAt        DateTime            @default(now())
+  createdAt           DateTime            @default(now())
 
-  @@unique([squareId, accountId])
+  @@unique([squareId, squareConnectionId])
 }
 
 // Variations of a Square item (e.g., Small, Medium, Large)
@@ -491,18 +500,20 @@ model SquareModifierMapping {
 
 // Track synced Square orders to prevent duplicate processing
 model SquareOrderSync {
-  id            String   @id @default(cuid())
-  squareOrderId String
-  accountId     String
-  account       Account  @relation(fields: [accountId], references: [id])
-  storeId       String   // Which store this order belongs to
-  orderDate     DateTime
-  totalMoney    Float?
-  itemCount     Int
-  status        String   @default("synced") // synced, processed, error
-  errorMessage  String?
-  processedAt   DateTime?
-  createdAt     DateTime @default(now())
+  id                  String           @id @default(cuid())
+  squareOrderId       String
+  squareConnectionId  String           // Which Square connection this came from
+  squareConnection    SquareConnection @relation(fields: [squareConnectionId], references: [id], onDelete: Cascade)
+  accountId           String
+  account             Account          @relation(fields: [accountId], references: [id])
+  storeId             String           // Which store this order belongs to
+  orderDate           DateTime
+  totalMoney          Float?
+  itemCount           Int
+  status              String           @default("synced") // synced, processed, error
+  errorMessage        String?
+  processedAt         DateTime?
+  createdAt           DateTime         @default(now())
 
-  @@unique([squareOrderId, accountId])
+  @@unique([squareOrderId, squareConnectionId])
 }
