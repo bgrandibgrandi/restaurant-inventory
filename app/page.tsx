@@ -6,12 +6,12 @@ import { LogoWithText } from '@/components/Logo';
 
 export default function Home() {
   return (
-    <div className="min-h-screen bg-white">
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50/30 to-indigo-50/20">
       {/* Premium Header with backdrop blur */}
-      <header className="sticky top-0 z-50 border-b border-gray-100 bg-white/90 backdrop-blur-md">
+      <header className="sticky top-0 z-50 border-b border-gray-200/50 bg-white/80 backdrop-blur-md">
         <div className="max-w-6xl mx-auto px-4 sm:px-6">
-          <div className="flex justify-between items-center h-14">
-            <LogoWithText size="sm" />
+          <div className="flex justify-between items-center h-16">
+            <LogoWithText size="md" />
             <div className="flex items-center gap-3">
               <button
                 onClick={() => signIn('google', { callbackUrl: '/dashboard' })}
@@ -21,7 +21,7 @@ export default function Home() {
               </button>
               <button
                 onClick={() => signIn('google', { callbackUrl: '/dashboard' })}
-                className="px-4 py-1.5 bg-red-600 hover:bg-red-700 text-white text-sm font-medium rounded-lg transition-colors"
+                className="px-5 py-2 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white text-sm font-semibold rounded-xl transition-all shadow-lg shadow-blue-500/25"
               >
                 Get started
               </button>
@@ -32,42 +32,43 @@ export default function Home() {
 
       <main>
         {/* Hero Section with Gradient Background */}
-        <div className="relative overflow-hidden bg-gradient-to-b from-red-50/30 via-white to-white">
+        <div className="relative overflow-hidden">
           {/* Subtle animated gradient orbs */}
-          <div className="absolute top-0 left-1/4 w-[500px] h-[500px] bg-red-200/20 rounded-full blur-3xl animate-pulse" />
-          <div className="absolute top-1/4 right-1/4 w-[500px] h-[500px] bg-orange-200/15 rounded-full blur-3xl animate-pulse" style={{ animationDelay: '1s' }} />
+          <div className="absolute top-0 left-1/4 w-[600px] h-[600px] bg-blue-200/30 rounded-full blur-3xl animate-pulse" />
+          <div className="absolute top-1/4 right-1/4 w-[500px] h-[500px] bg-indigo-200/20 rounded-full blur-3xl animate-pulse" style={{ animationDelay: '1s' }} />
+          <div className="absolute bottom-0 right-1/3 w-[400px] h-[400px] bg-purple-200/20 rounded-full blur-3xl animate-pulse" style={{ animationDelay: '2s' }} />
 
-          <div className="relative max-w-6xl mx-auto px-4 sm:px-6 pt-16 pb-20">
+          <div className="relative max-w-6xl mx-auto px-4 sm:px-6 pt-20 pb-24">
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-16 items-center">
               {/* Left: Content */}
-              <div className="space-y-6">
+              <div className="space-y-8">
                 {/* Badge */}
-                <div className="inline-flex items-center gap-2 px-3 py-1.5 bg-white border border-gray-200 rounded-full shadow-sm">
-                  <span className="w-1.5 h-1.5 bg-green-500 rounded-full animate-pulse" />
-                  <span className="text-xs font-medium text-gray-700">
+                <div className="inline-flex items-center gap-2 px-4 py-2 bg-white/80 backdrop-blur-sm border border-gray-200/50 rounded-full shadow-sm">
+                  <span className="w-2 h-2 bg-green-500 rounded-full animate-pulse" />
+                  <span className="text-sm font-medium text-gray-700">
                     Trusted by restaurants worldwide
                   </span>
                 </div>
 
                 {/* Headline */}
                 <div>
-                  <h1 className="text-4xl lg:text-5xl font-bold text-gray-900 leading-tight mb-4">
+                  <h1 className="text-5xl lg:text-6xl font-bold text-gray-900 leading-tight mb-6">
                     Your inventory.
                     <br />
-                    <span className="bg-gradient-to-r from-red-600 to-red-500 bg-clip-text text-transparent">
+                    <span className="bg-gradient-to-r from-blue-600 via-indigo-600 to-purple-600 bg-clip-text text-transparent">
                       Always in control.
                     </span>
                   </h1>
-                  <p className="text-lg text-gray-600 leading-relaxed max-w-lg">
+                  <p className="text-xl text-gray-600 leading-relaxed max-w-lg">
                     Track stock, manage costs, and reduce waste with the most intuitive inventory management platform for restaurants.
                   </p>
                 </div>
 
                 {/* CTA Buttons */}
-                <div className="flex flex-col sm:flex-row gap-3">
+                <div className="flex flex-col sm:flex-row gap-4">
                   <button
                     onClick={() => signIn('google', { callbackUrl: '/dashboard' })}
-                    className="group inline-flex items-center justify-center px-6 py-3 bg-red-600 hover:bg-red-700 text-white font-medium rounded-lg transition-all shadow-lg shadow-red-500/20 hover:shadow-xl hover:shadow-red-500/30"
+                    className="group inline-flex items-center justify-center px-8 py-4 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-semibold rounded-xl transition-all shadow-xl shadow-blue-500/25 hover:shadow-2xl hover:shadow-blue-500/30"
                   >
                     <svg className="mr-2 w-5 h-5" viewBox="0 0 24 24">
                       <path fill="currentColor" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
@@ -76,28 +77,33 @@ export default function Home() {
                       <path fill="currentColor" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/>
                     </svg>
                     Continue with Google
-                    <svg className="ml-2 w-4 h-4 group-hover:translate-x-0.5 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <svg className="ml-2 w-5 h-5 group-hover:translate-x-0.5 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7l5 5m0 0l-5 5m5-5H6" />
                     </svg>
                   </button>
                 </div>
 
                 {/* Social Proof */}
-                <div className="flex items-center gap-6 pt-2">
+                <div className="flex items-center gap-6 pt-4">
                   <div className="flex -space-x-2">
                     {[1, 2, 3, 4].map((i) => (
-                      <div key={i} className="w-8 h-8 rounded-full bg-gradient-to-br from-red-400 to-orange-400 border-2 border-white" />
+                      <div key={i} className={`w-10 h-10 rounded-full bg-gradient-to-br ${
+                        i === 1 ? 'from-blue-400 to-indigo-500' :
+                        i === 2 ? 'from-indigo-400 to-purple-500' :
+                        i === 3 ? 'from-purple-400 to-pink-500' :
+                        'from-pink-400 to-rose-500'
+                      } border-2 border-white shadow-sm`} />
                     ))}
                   </div>
                   <div>
-                    <div className="flex items-center gap-0.5 mb-0.5">
+                    <div className="flex items-center gap-0.5 mb-1">
                       {[1, 2, 3, 4, 5].map((i) => (
-                        <svg key={i} className="w-3.5 h-3.5 text-yellow-400 fill-current" viewBox="0 0 20 20">
+                        <svg key={i} className="w-4 h-4 text-yellow-400 fill-current" viewBox="0 0 20 20">
                           <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
                         </svg>
                       ))}
                     </div>
-                    <p className="text-xs text-gray-600">
+                    <p className="text-sm text-gray-600">
                       Loved by restaurants worldwide
                     </p>
                   </div>
@@ -107,41 +113,41 @@ export default function Home() {
               {/* Right: Premium Dashboard Preview */}
               <div className="relative">
                 {/* Subtle glow effect */}
-                <div className="absolute inset-0 bg-gradient-to-r from-red-500/10 to-orange-500/10 blur-2xl" />
+                <div className="absolute inset-0 bg-gradient-to-r from-blue-500/10 to-indigo-500/10 blur-2xl" />
 
-                <div className="relative bg-white rounded-xl shadow-xl border border-gray-200 overflow-hidden">
+                <div className="relative bg-white/70 backdrop-blur-sm rounded-2xl shadow-2xl border border-gray-200/50 overflow-hidden">
                   {/* Dashboard Header */}
-                  <div className="bg-gradient-to-r from-red-600 to-red-500 px-5 py-4 text-white">
-                    <div className="flex items-center justify-between mb-2">
-                      <h3 className="text-base font-semibold">Live Dashboard</h3>
-                      <span className="px-2.5 py-0.5 bg-white/20 backdrop-blur-sm rounded-full text-xs font-medium">
+                  <div className="bg-gradient-to-r from-blue-600 to-indigo-600 px-6 py-5 text-white">
+                    <div className="flex items-center justify-between mb-3">
+                      <h3 className="text-lg font-semibold">Live Dashboard</h3>
+                      <span className="px-3 py-1 bg-white/20 backdrop-blur-sm rounded-full text-xs font-medium">
                         Real-time
                       </span>
                     </div>
-                    <div className="flex items-baseline gap-1.5">
-                      <span className="text-3xl font-bold">€12,450</span>
-                      <span className="text-xs opacity-90">current inventory</span>
+                    <div className="flex items-baseline gap-2">
+                      <span className="text-4xl font-bold">€12,450</span>
+                      <span className="text-sm opacity-90">current inventory</span>
                     </div>
                   </div>
 
                   {/* Stats Grid */}
-                  <div className="grid grid-cols-2 gap-3 p-5 bg-gray-50">
-                    <div className="bg-white rounded-lg p-3 shadow-sm border border-gray-100">
-                      <div className="text-xl font-bold text-gray-900">156</div>
-                      <div className="text-xs text-gray-600 mt-0.5">Items tracked</div>
+                  <div className="grid grid-cols-2 gap-4 p-6 bg-gradient-to-br from-gray-50/50 to-blue-50/30">
+                    <div className="bg-white/80 backdrop-blur-sm rounded-xl p-4 shadow-sm border border-gray-200/50">
+                      <div className="text-2xl font-bold text-gray-900">156</div>
+                      <div className="text-sm text-gray-600 mt-1">Items tracked</div>
                     </div>
-                    <div className="bg-white rounded-lg p-3 shadow-sm border border-gray-100">
-                      <div className="text-xl font-bold text-green-600">+12%</div>
-                      <div className="text-xs text-gray-600 mt-0.5">vs last month</div>
+                    <div className="bg-white/80 backdrop-blur-sm rounded-xl p-4 shadow-sm border border-gray-200/50">
+                      <div className="text-2xl font-bold text-green-600">+12%</div>
+                      <div className="text-sm text-gray-600 mt-1">vs last month</div>
                     </div>
                   </div>
 
                   {/* Recent Activity */}
-                  <div className="p-5 space-y-2.5">
-                    <div className="flex items-center justify-between p-2.5 bg-gray-50 rounded-lg">
-                      <div className="flex items-center gap-2.5">
-                        <div className="w-9 h-9 bg-red-100 rounded-lg flex items-center justify-center">
-                          <svg className="w-4 h-4 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <div className="p-6 space-y-3">
+                    <div className="flex items-center justify-between p-3 bg-gradient-to-r from-blue-50/50 to-indigo-50/30 rounded-xl border border-blue-100/50">
+                      <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 bg-gradient-to-br from-blue-100 to-indigo-100 rounded-xl flex items-center justify-center">
+                          <svg className="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
                           </svg>
                         </div>
@@ -150,13 +156,13 @@ export default function Home() {
                           <div className="text-xs text-gray-500">+50kg added</div>
                         </div>
                       </div>
-                      <div className="text-sm font-semibold text-gray-900">€225</div>
+                      <div className="text-sm font-bold text-gray-900">€225</div>
                     </div>
 
-                    <div className="flex items-center justify-between p-2.5 bg-gray-50 rounded-lg">
-                      <div className="flex items-center gap-2.5">
-                        <div className="w-9 h-9 bg-orange-100 rounded-lg flex items-center justify-center">
-                          <svg className="w-4 h-4 text-orange-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <div className="flex items-center justify-between p-3 bg-gradient-to-r from-purple-50/50 to-pink-50/30 rounded-xl border border-purple-100/50">
+                      <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 bg-gradient-to-br from-purple-100 to-pink-100 rounded-xl flex items-center justify-center">
+                          <svg className="w-5 h-5 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
                           </svg>
                         </div>
@@ -165,7 +171,7 @@ export default function Home() {
                           <div className="text-xs text-gray-500">+15L added</div>
                         </div>
                       </div>
-                      <div className="text-sm font-semibold text-gray-900">€120</div>
+                      <div className="text-sm font-bold text-gray-900">€120</div>
                     </div>
                   </div>
                 </div>
@@ -175,18 +181,18 @@ export default function Home() {
         </div>
 
         {/* Features Section */}
-        <div className="py-20 bg-white">
+        <div className="py-24 bg-white/50 backdrop-blur-sm">
           <div className="max-w-6xl mx-auto px-4 sm:px-6">
-            <div className="text-center mb-12">
-              <h2 className="text-3xl font-bold text-gray-900 mb-3">
+            <div className="text-center mb-16">
+              <h2 className="text-4xl font-bold text-gray-900 mb-4">
                 Everything you need to manage inventory
               </h2>
-              <p className="text-lg text-gray-600">
+              <p className="text-xl text-gray-600">
                 Powerful features designed for modern restaurants
               </p>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
               {[
                 {
                   icon: (
@@ -194,7 +200,8 @@ export default function Home() {
                   ),
                   title: 'Lightning fast',
                   description: 'Real-time updates across all devices. See changes instantly.',
-                  color: 'from-yellow-500 to-orange-500',
+                  color: 'from-yellow-400 to-orange-500',
+                  bgColor: 'from-yellow-50 to-orange-50',
                 },
                 {
                   icon: (
@@ -202,7 +209,8 @@ export default function Home() {
                   ),
                   title: 'Secure & private',
                   description: 'Bank-level encryption. Your data is always protected.',
-                  color: 'from-green-500 to-emerald-500',
+                  color: 'from-green-400 to-emerald-500',
+                  bgColor: 'from-green-50 to-emerald-50',
                 },
                 {
                   icon: (
@@ -210,22 +218,23 @@ export default function Home() {
                   ),
                   title: 'Smart analytics',
                   description: 'Track trends, identify patterns, make better decisions.',
-                  color: 'from-blue-500 to-indigo-500',
+                  color: 'from-blue-400 to-indigo-500',
+                  bgColor: 'from-blue-50 to-indigo-50',
                 },
               ].map((feature, i) => (
                 <div
                   key={i}
-                  className="group relative bg-white rounded-xl p-6 border border-gray-200 hover:border-gray-300 hover:shadow-lg transition-all duration-300"
+                  className="group relative bg-white/70 backdrop-blur-sm rounded-2xl p-8 border border-gray-200/50 hover:border-gray-300/50 hover:shadow-xl transition-all duration-300"
                 >
-                  <div className={`w-12 h-12 bg-gradient-to-br ${feature.color} rounded-lg flex items-center justify-center mb-4`}>
-                    <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <div className={`w-14 h-14 bg-gradient-to-br ${feature.color} rounded-xl flex items-center justify-center mb-6 shadow-lg`}>
+                    <svg className="w-7 h-7 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       {feature.icon}
                     </svg>
                   </div>
-                  <h3 className="text-lg font-bold text-gray-900 mb-2">
+                  <h3 className="text-xl font-bold text-gray-900 mb-3">
                     {feature.title}
                   </h3>
-                  <p className="text-gray-600 text-sm leading-relaxed">
+                  <p className="text-gray-600 leading-relaxed">
                     {feature.description}
                   </p>
                 </div>
@@ -235,25 +244,26 @@ export default function Home() {
         </div>
 
         {/* CTA Section */}
-        <div className="relative overflow-hidden bg-gradient-to-br from-red-600 to-red-500 py-20">
-          <div className="absolute inset-0 bg-[radial-gradient(circle_at_30%_50%,rgba(255,255,255,0.1),transparent)]" />
+        <div className="relative overflow-hidden bg-gradient-to-br from-blue-600 via-indigo-600 to-purple-600 py-24">
+          <div className="absolute inset-0 bg-[radial-gradient(circle_at_30%_50%,rgba(255,255,255,0.15),transparent)]" />
+          <div className="absolute inset-0 bg-[radial-gradient(circle_at_70%_80%,rgba(255,255,255,0.1),transparent)]" />
           <div className="relative max-w-4xl mx-auto px-4 sm:px-6 text-center">
-            <h2 className="text-3xl lg:text-4xl font-bold text-white mb-4">
+            <h2 className="text-4xl lg:text-5xl font-bold text-white mb-6">
               Ready to transform your inventory?
             </h2>
-            <p className="text-lg text-white/90 mb-8">
+            <p className="text-xl text-white/90 mb-10">
               Join restaurants worldwide saving time and reducing waste.
             </p>
             <button
               onClick={() => signIn('google', { callbackUrl: '/dashboard' })}
-              className="inline-flex items-center px-8 py-3.5 bg-white hover:bg-gray-50 text-red-600 font-semibold rounded-lg transition-all shadow-xl hover:shadow-2xl"
+              className="inline-flex items-center px-10 py-4 bg-white hover:bg-gray-50 text-blue-600 font-bold rounded-xl transition-all shadow-2xl hover:shadow-3xl text-lg"
             >
               Start with Google
-              <svg className="ml-2 w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <svg className="ml-3 w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7l5 5m0 0l-5 5m5-5H6" />
               </svg>
             </button>
-            <p className="mt-5 text-white/80 text-sm">
+            <p className="mt-6 text-white/80 text-sm">
               No credit card required • Free forever • Secure with Google
             </p>
           </div>
@@ -261,11 +271,11 @@ export default function Home() {
       </main>
 
       {/* Footer */}
-      <footer className="bg-gray-50 border-t border-gray-200 py-10">
+      <footer className="bg-white/50 backdrop-blur-sm border-t border-gray-200/50 py-12">
         <div className="max-w-6xl mx-auto px-4 sm:px-6">
           <div className="flex flex-col md:flex-row justify-between items-center">
-            <LogoWithText size="sm" />
-            <p className="text-sm text-gray-600 mt-3 md:mt-0">
+            <LogoWithText size="md" />
+            <p className="text-sm text-gray-600 mt-4 md:mt-0">
               © 2026 Nigiri Vibes. Built with care for restaurants.
             </p>
           </div>
