@@ -19,7 +19,7 @@ interface Recipe {
   yieldQuantity: number;
   yieldUnit: string;
   isSubRecipe: boolean;
-  costPerPortion: number | null;
+  costPerPortion?: number | null;
 }
 
 interface Store {

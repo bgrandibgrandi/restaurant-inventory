@@ -3,6 +3,31 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/db';
 
+// Helper function to calculate recipe cost using latest purchase prices
+function calculateRecipeCost(recipe: any): number {
+  let totalCost = 0;
+
+  for (const ingredient of recipe.ingredients || []) {
+    if (ingredient.item) {
+      // Get latest purchase price
+      const latestMovement = ingredient.item.stockMovements?.[0];
+      const unitCost = latestMovement?.costPrice || ingredient.item.costPrice || 0;
+
+      // Apply waste factor: if 10% waste, need 10% more = multiply by 1.1
+      const adjustedQuantity = ingredient.quantity * (1 + (ingredient.wasteFactor || 0));
+      totalCost += unitCost * adjustedQuantity;
+    } else if (ingredient.subRecipe) {
+      // Recursively calculate sub-recipe cost
+      const subRecipeCost = calculateRecipeCost(ingredient.subRecipe);
+      const costPerYield = subRecipeCost / (ingredient.subRecipe.yieldQuantity || 1);
+      const adjustedQuantity = ingredient.quantity * (1 + (ingredient.wasteFactor || 0));
+      totalCost += costPerYield * adjustedQuantity;
+    }
+  }
+
+  return totalCost;
+}
+
 // Get profitability analytics for menu engineering
 export async function GET(request: NextRequest) {
   try {
@@ -18,6 +43,36 @@ export async function GET(request: NextRequest) {
         isSubRecipe: false, // Only menu items
       },
       include: {
+        ingredients: {
+          include: {
+            item: {
+              include: {
+                stockMovements: {
+                  where: { type: 'PURCHASE' },
+                  orderBy: { createdAt: 'desc' },
+                  take: 1,
+                },
+              },
+            },
+            subRecipe: {
+              include: {
+                ingredients: {
+                  include: {
+                    item: {
+                      include: {
+                        stockMovements: {
+                          where: { type: 'PURCHASE' },
+                          orderBy: { createdAt: 'desc' },
+                          take: 1,
+                        },
+                      },
+                    },
+                  },
+                },
+              },
+            },
+          },
+        },
         squareItemMappings: {
           include: {
             catalogItem: {
@@ -47,7 +102,8 @@ export async function GET(request: NextRequest) {
 
     // Process recipes to calculate profitability metrics
     const processedRecipes = recipes.map((recipe) => {
-      const cost = recipe.costPerPortion || 0;
+      const totalCost = calculateRecipeCost(recipe);
+      const costPerPortion = totalCost / recipe.yieldQuantity;
 
       // Extract sale price from Square
       let salePrice: number | null = null;
@@ -60,15 +116,15 @@ export async function GET(request: NextRequest) {
         }
       }
 
-      const profit = salePrice !== null ? salePrice - cost : null;
+      const profit = salePrice !== null ? salePrice - costPerPortion : null;
       const margin = salePrice !== null && salePrice > 0 ? (profit! / salePrice) * 100 : null;
-      const foodCostPercentage = salePrice !== null && salePrice > 0 ? (cost / salePrice) * 100 : null;
+      const foodCostPercentage = salePrice !== null && salePrice > 0 ? (costPerPortion / salePrice) * 100 : null;
 
       return {
         id: recipe.id,
         name: recipe.name,
         imageUrl: recipe.imageUrl,
-        cost,
+        cost: costPerPortion,
         salePrice,
         profit,
         margin,

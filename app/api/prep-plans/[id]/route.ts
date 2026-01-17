@@ -35,7 +35,6 @@ export async function GET(
                 yieldQuantity: true,
                 yieldUnit: true,
                 isSubRecipe: true,
-                costPerPortion: true,
               },
             },
           },

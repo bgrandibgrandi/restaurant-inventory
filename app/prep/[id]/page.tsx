@@ -25,7 +25,6 @@ interface Recipe {
   yieldQuantity: number;
   yieldUnit: string;
   isSubRecipe: boolean;
-  costPerPortion: number | null;
 }
 
 interface PrepPlanItem {
@@ -485,15 +484,6 @@ export default function PrepPlanDetailPage({ params }: { params: Promise<{ id: s
                       <p className="text-sm text-gray-400 mt-1">{item.notes}</p>
                     )}
                   </div>
-
-                  {item.recipe.costPerPortion && (
-                    <div className="text-right">
-                      <p className="text-sm text-gray-500">Est. Cost</p>
-                      <p className="font-medium text-gray-900">
-                        €{(item.recipe.costPerPortion * item.targetQuantity).toFixed(2)}
-                      </p>
-                    </div>
-                  )}
 
                   {plan.status !== 'completed' && (
                     <button
