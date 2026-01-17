@@ -31,6 +31,7 @@ function IntegrationsContent() {
   const [loading, setLoading] = useState(true);
   const [connecting, setConnecting] = useState<string | null>(null);
   const [syncing, setSyncing] = useState<string | null>(null);
+  const [syncingOrders, setSyncingOrders] = useState<string | null>(null);
   const [disconnecting, setDisconnecting] = useState<string | null>(null);
 
   const successMessage = searchParams.get('success');
@@ -132,6 +133,33 @@ function IntegrationsContent() {
       alert('An error occurred');
     } finally {
       setSyncing(null);
+    }
+  };
+
+  const handleSyncOrders = async (connectionId: string) => {
+    setSyncingOrders(connectionId);
+    try {
+      const response = await fetch('/api/square/orders', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ connectionId }),
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        alert(
+          `Processed ${data.processedOrders} orders, created ${data.createdMovements} stock movements. ${data.skippedOrders} orders skipped (already processed or no mappings).`
+        );
+        fetchData();
+      } else {
+        const error = await response.json();
+        alert(error.error || 'Failed to sync orders');
+      }
+    } catch (error) {
+      console.error('Error syncing orders:', error);
+      alert('An error occurred');
+    } finally {
+      setSyncingOrders(null);
     }
   };
 
@@ -258,6 +286,13 @@ function IntegrationsContent() {
                             {syncing === connection.id ? 'Syncing...' : 'Sync Catalog'}
                           </button>
                           <button
+                            onClick={() => handleSyncOrders(connection.id)}
+                            disabled={syncingOrders === connection.id}
+                            className="px-3 py-1.5 text-sm font-medium text-green-600 hover:bg-green-50 rounded-lg transition disabled:opacity-50"
+                          >
+                            {syncingOrders === connection.id ? 'Syncing...' : 'Sync Orders'}
+                          </button>
+                          <button
                             onClick={() => handleDisconnect(connection.id)}
                             disabled={disconnecting === connection.id}
                             className="px-3 py-1.5 text-sm font-medium text-red-600 hover:bg-red-50 rounded-lg transition disabled:opacity-50"
@@ -295,11 +330,10 @@ function IntegrationsContent() {
               Square Catalog Items
             </h3>
             <p className="text-sm text-gray-500 mb-4">
-              After syncing, map your Square items to recipes in the{' '}
-              <Link href="/recipes" className="text-blue-600 hover:underline">
-                Recipes
-              </Link>{' '}
-              section.
+              After syncing, map your Square items to recipes.{' '}
+              <Link href="/recipes/mappings" className="text-blue-600 hover:underline">
+                Manage Mappings
+              </Link>
             </p>
             {connections.map((connection) => (
               <div key={connection.id} className="mb-4 last:mb-0">
