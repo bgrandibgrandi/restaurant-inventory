@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useRef } from 'react';
 
 interface GoogleDrivePickerProps {
   onFilePicked: (file: { id: string; name: string; mimeType: string }) => void;
@@ -17,7 +17,8 @@ declare global {
 export default function GoogleDrivePicker({ onFilePicked, disabled }: GoogleDrivePickerProps) {
   const [isLoading, setIsLoading] = useState(false);
   const [pickerApiLoaded, setPickerApiLoaded] = useState(false);
-  const [oauthToken, setOauthToken] = useState<string | null>(null);
+  const [gisLoaded, setGisLoaded] = useState(false);
+  const oauthTokenRef = useRef<string | null>(null);
 
   const clientId = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID || '';
   const apiKey = process.env.NEXT_PUBLIC_GOOGLE_API_KEY || '';
@@ -25,97 +26,133 @@ export default function GoogleDrivePicker({ onFilePicked, disabled }: GoogleDriv
 
   // Load the Google API scripts
   useEffect(() => {
-    const loadGoogleApis = async () => {
-      // Load Google API script
-      if (!window.gapi) {
-        const gapiScript = document.createElement('script');
-        gapiScript.src = 'https://apis.google.com/js/api.js';
-        gapiScript.async = true;
-        gapiScript.defer = true;
-        gapiScript.onload = () => {
-          window.gapi.load('picker', () => {
-            setPickerApiLoaded(true);
-          });
-        };
-        document.body.appendChild(gapiScript);
-      } else {
+    // Load Google API script for Picker
+    if (!window.gapi) {
+      const gapiScript = document.createElement('script');
+      gapiScript.src = 'https://apis.google.com/js/api.js';
+      gapiScript.async = true;
+      gapiScript.defer = true;
+      gapiScript.onload = () => {
         window.gapi.load('picker', () => {
+          console.log('[GoogleDrive] Picker API loaded');
           setPickerApiLoaded(true);
         });
-      }
+      };
+      document.body.appendChild(gapiScript);
+    } else if (window.gapi.picker) {
+      setPickerApiLoaded(true);
+    } else {
+      window.gapi.load('picker', () => {
+        console.log('[GoogleDrive] Picker API loaded');
+        setPickerApiLoaded(true);
+      });
+    }
 
-      // Load Google Identity Services
-      if (!window.google?.accounts) {
-        const gisScript = document.createElement('script');
-        gisScript.src = 'https://accounts.google.com/gsi/client';
-        gisScript.async = true;
-        gisScript.defer = true;
-        document.body.appendChild(gisScript);
-      }
-    };
-
-    loadGoogleApis();
+    // Load Google Identity Services
+    if (!window.google?.accounts?.oauth2) {
+      const gisScript = document.createElement('script');
+      gisScript.src = 'https://accounts.google.com/gsi/client';
+      gisScript.async = true;
+      gisScript.defer = true;
+      gisScript.onload = () => {
+        console.log('[GoogleDrive] GIS loaded');
+        setGisLoaded(true);
+      };
+      document.body.appendChild(gisScript);
+    } else {
+      setGisLoaded(true);
+    }
   }, []);
 
-  const handleAuthClick = useCallback(() => {
-    if (!window.google?.accounts?.oauth2) {
-      console.error('Google Identity Services not loaded');
+  const createPicker = (token: string) => {
+    if (!window.google?.picker) {
+      console.error('[GoogleDrive] Picker not available');
+      setIsLoading(false);
       return;
     }
 
+    console.log('[GoogleDrive] Creating picker...');
+
+    try {
+      const view = new window.google.picker.DocsView()
+        .setIncludeFolders(true)
+        .setMimeTypes('application/pdf,image/jpeg,image/png,image/webp')
+        .setMode(window.google.picker.DocsViewMode.LIST);
+
+      const picker = new window.google.picker.PickerBuilder()
+        .setAppId(appId)
+        .setOAuthToken(token)
+        .setDeveloperKey(apiKey)
+        .addView(view)
+        .addView(new window.google.picker.DocsUploadView())
+        .setOrigin(window.location.origin)
+        .setCallback((data: any) => {
+          console.log('[GoogleDrive] Picker callback:', data.action);
+          if (data.action === window.google.picker.Action.PICKED) {
+            const file = data.docs[0];
+            onFilePicked({
+              id: file.id,
+              name: file.name,
+              mimeType: file.mimeType,
+            });
+          }
+          if (data.action === window.google.picker.Action.PICKED ||
+              data.action === window.google.picker.Action.CANCEL) {
+            setIsLoading(false);
+          }
+        })
+        .setTitle('Select Invoice from Google Drive')
+        .build();
+
+      console.log('[GoogleDrive] Showing picker...');
+      picker.setVisible(true);
+    } catch (error) {
+      console.error('[GoogleDrive] Error creating picker:', error);
+      setIsLoading(false);
+    }
+  };
+
+  const handleClick = () => {
+    if (!gisLoaded || !window.google?.accounts?.oauth2) {
+      console.error('[GoogleDrive] GIS not loaded yet');
+      alert('Google Drive is still loading. Please try again.');
+      return;
+    }
+
+    if (!pickerApiLoaded) {
+      console.error('[GoogleDrive] Picker API not loaded yet');
+      alert('Google Drive is still loading. Please try again.');
+      return;
+    }
+
+    setIsLoading(true);
+
+    // If we have a token, use it directly
+    if (oauthTokenRef.current) {
+      createPicker(oauthTokenRef.current);
+      return;
+    }
+
+    // Otherwise, request a new token
+    console.log('[GoogleDrive] Requesting access token...');
     const tokenClient = window.google.accounts.oauth2.initTokenClient({
       client_id: clientId,
       scope: 'https://www.googleapis.com/auth/drive.readonly',
       callback: (response: any) => {
+        console.log('[GoogleDrive] Token response:', response.error || 'success');
+        if (response.error) {
+          console.error('[GoogleDrive] Auth error:', response.error);
+          setIsLoading(false);
+          return;
+        }
         if (response.access_token) {
-          setOauthToken(response.access_token);
+          oauthTokenRef.current = response.access_token;
           createPicker(response.access_token);
         }
       },
     });
 
     tokenClient.requestAccessToken({ prompt: '' });
-  }, [clientId]);
-
-  const createPicker = useCallback((token: string) => {
-    if (!pickerApiLoaded || !token) return;
-
-    setIsLoading(true);
-
-    const view = new window.google.picker.DocsView()
-      .setIncludeFolders(true)
-      .setMimeTypes('application/pdf,image/jpeg,image/png,image/webp')
-      .setMode(window.google.picker.DocsViewMode.LIST);
-
-    const picker = new window.google.picker.PickerBuilder()
-      .setAppId(appId)
-      .setOAuthToken(token)
-      .setDeveloperKey(apiKey)
-      .addView(view)
-      .addView(new window.google.picker.DocsUploadView())
-      .setCallback((data: any) => {
-        if (data.action === window.google.picker.Action.PICKED) {
-          const file = data.docs[0];
-          onFilePicked({
-            id: file.id,
-            name: file.name,
-            mimeType: file.mimeType,
-          });
-        }
-        setIsLoading(false);
-      })
-      .setTitle('Select Invoice from Google Drive')
-      .build();
-
-    picker.setVisible(true);
-  }, [pickerApiLoaded, apiKey, appId, onFilePicked]);
-
-  const handleClick = () => {
-    if (oauthToken) {
-      createPicker(oauthToken);
-    } else {
-      handleAuthClick();
-    }
   };
 
   // Check if Google Drive is configured
@@ -123,11 +160,13 @@ export default function GoogleDrivePicker({ onFilePicked, disabled }: GoogleDriv
     return null;
   }
 
+  const isReady = pickerApiLoaded && gisLoaded;
+
   return (
     <button
       type="button"
       onClick={handleClick}
-      disabled={disabled || isLoading || !pickerApiLoaded}
+      disabled={disabled || isLoading || !isReady}
       className="flex items-center justify-center gap-2 w-full px-4 py-3 border border-gray-300 rounded-xl hover:bg-gray-50 transition disabled:opacity-50 disabled:cursor-not-allowed"
     >
       {isLoading ? (
@@ -143,7 +182,7 @@ export default function GoogleDrivePicker({ onFilePicked, disabled }: GoogleDriv
         </svg>
       )}
       <span className="font-medium text-gray-700">
-        {isLoading ? 'Opening...' : 'Import from Google Drive'}
+        {!isReady ? 'Loading Google Drive...' : isLoading ? 'Opening...' : 'Import from Google Drive'}
       </span>
     </button>
   );
