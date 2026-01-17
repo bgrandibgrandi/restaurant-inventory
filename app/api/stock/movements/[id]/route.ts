@@ -64,7 +64,7 @@ export async function GET(
           items: {
             select: {
               id: true,
-              name: true,
+              rawName: true,
               quantity: true,
               unit: true,
               unitPrice: true,
