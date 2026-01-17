@@ -236,19 +236,6 @@ function IntegrationsContent() {
             </div>
           </div>
 
-          {/* Setup Requirements */}
-          {!process.env.NEXT_PUBLIC_SQUARE_CONFIGURED && (
-            <div className="mb-6 p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
-              <h3 className="font-medium text-yellow-800 mb-2">Setup Required</h3>
-              <p className="text-sm text-yellow-700 mb-2">
-                To enable Square integration, add these environment variables:
-              </p>
-              <ul className="text-sm text-yellow-700 list-disc list-inside">
-                <li>SQUARE_APPLICATION_ID</li>
-                <li>SQUARE_APPLICATION_SECRET</li>
-              </ul>
-            </div>
-          )}
 
           {/* Store Connections */}
           <h3 className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-3">
