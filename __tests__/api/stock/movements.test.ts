@@ -2,50 +2,38 @@
  * Tests for Stock Movements functionality
  */
 
+type MovementType = 'PURCHASE' | 'WASTE' | 'TRANSFER_IN' | 'TRANSFER_OUT' | 'SALE' | 'ADJUSTMENT';
+
+function adjustQuantityForType(type: MovementType, quantity: number): number {
+  if (type === 'PURCHASE' || type === 'TRANSFER_IN') {
+    return Math.abs(quantity);
+  }
+  if (type === 'WASTE' || type === 'TRANSFER_OUT' || type === 'SALE') {
+    return -Math.abs(quantity);
+  }
+  return quantity; // ADJUSTMENT keeps sign
+}
+
 describe('Stock Movements', () => {
   describe('Movement type quantity signs', () => {
     it('should make PURCHASE quantity positive', () => {
-      const type = 'PURCHASE';
-      let quantity = 10;
-      
-      if (type === 'PURCHASE' || type === 'TRANSFER_IN') {
-        quantity = Math.abs(quantity);
-      }
-      
-      expect(quantity).toBeGreaterThan(0);
+      const result = adjustQuantityForType('PURCHASE', 10);
+      expect(result).toBeGreaterThan(0);
     });
 
     it('should make WASTE quantity negative', () => {
-      const type = 'WASTE';
-      let quantity = 10;
-      
-      if (type === 'WASTE' || type === 'TRANSFER_OUT' || type === 'SALE') {
-        quantity = -Math.abs(quantity);
-      }
-      
-      expect(quantity).toBeLessThan(0);
+      const result = adjustQuantityForType('WASTE', 10);
+      expect(result).toBeLessThan(0);
     });
 
     it('should make TRANSFER_OUT quantity negative', () => {
-      const type = 'TRANSFER_OUT';
-      let quantity = 10;
-      
-      if (type === 'WASTE' || type === 'TRANSFER_OUT' || type === 'SALE') {
-        quantity = -Math.abs(quantity);
-      }
-      
-      expect(quantity).toBeLessThan(0);
+      const result = adjustQuantityForType('TRANSFER_OUT', 10);
+      expect(result).toBeLessThan(0);
     });
 
     it('should make TRANSFER_IN quantity positive', () => {
-      const type = 'TRANSFER_IN';
-      let quantity = 10;
-      
-      if (type === 'PURCHASE' || type === 'TRANSFER_IN') {
-        quantity = Math.abs(quantity);
-      }
-      
-      expect(quantity).toBeGreaterThan(0);
+      const result = adjustQuantityForType('TRANSFER_IN', 10);
+      expect(result).toBeGreaterThan(0);
     });
 
     it('should allow ADJUSTMENT to be positive or negative', () => {
