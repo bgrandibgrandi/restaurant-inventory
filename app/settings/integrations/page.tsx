@@ -3,6 +3,7 @@
 import { useState, useEffect, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
 import Link from 'next/link';
+import PageLayout, { Card, Button, LinkButton, Badge, StatCard } from '@/components/ui/PageLayout';
 
 interface Store {
   id: string;
@@ -72,7 +73,6 @@ function IntegrationsContent() {
 
       if (response.ok) {
         const data = await response.json();
-        // Redirect to Square OAuth
         window.location.href = data.authUrl;
       } else {
         const error = await response.json();
@@ -179,193 +179,187 @@ function IntegrationsContent() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="text-center">
-          <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
-          <p className="mt-4 text-gray-600">Loading...</p>
+      <PageLayout title="Integrations" backHref="/dashboard" showNav={false}>
+        <div className="flex items-center justify-center py-20">
+          <div className="text-center">
+            <div className="inline-block h-8 w-8 animate-spin rounded-full border-4 border-solid border-blue-600 border-r-transparent"></div>
+            <p className="mt-4 text-gray-500">Loading...</p>
+          </div>
         </div>
-      </div>
+      </PageLayout>
     );
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      {/* Header */}
-      <header className="bg-white border-b border-gray-200 sticky top-0 z-10">
-        <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between items-center h-16">
-            <div className="flex items-center gap-4">
-              <Link href="/settings" className="text-gray-600 hover:text-gray-900">
-                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-                </svg>
-              </Link>
-              <h1 className="text-xl font-semibold text-gray-900">Integrations</h1>
-            </div>
+    <PageLayout title="Integrations" backHref="/dashboard" showNav={false}>
+      {/* Messages */}
+      {successMessage && (
+        <div className="mb-6 p-4 bg-green-50 border border-green-200/50 rounded-2xl text-green-800">
+          {decodeURIComponent(successMessage)}
+        </div>
+      )}
+      {errorMessage && (
+        <div className="mb-6 p-4 bg-red-50 border border-red-200/50 rounded-2xl text-red-800">
+          {decodeURIComponent(errorMessage)}
+        </div>
+      )}
+
+      {/* Square Integration Section */}
+      <Card className="mb-8">
+        <div className="flex items-center gap-4 mb-6">
+          <div className="w-14 h-14 bg-black rounded-xl flex items-center justify-center shadow-lg">
+            <svg className="w-8 h-8 text-white" viewBox="0 0 24 24" fill="currentColor">
+              <path d="M4.5 2A2.5 2.5 0 002 4.5v15A2.5 2.5 0 004.5 22h15a2.5 2.5 0 002.5-2.5v-15A2.5 2.5 0 0019.5 2h-15zM8 7h8a1 1 0 011 1v8a1 1 0 01-1 1H8a1 1 0 01-1-1V8a1 1 0 011-1z"/>
+            </svg>
+          </div>
+          <div>
+            <h2 className="text-xl font-bold bg-gradient-to-r from-gray-900 to-gray-700 bg-clip-text text-transparent">
+              Square POS
+            </h2>
+            <p className="text-sm text-gray-500">
+              Connect your Square account to sync menu items and track sales
+            </p>
           </div>
         </div>
-      </header>
 
-      {/* Main Content */}
-      <main className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {/* Messages */}
-        {successMessage && (
-          <div className="mb-6 p-4 bg-green-50 border border-green-200 rounded-lg text-green-800">
-            {decodeURIComponent(successMessage)}
-          </div>
-        )}
-        {errorMessage && (
-          <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg text-red-800">
-            {decodeURIComponent(errorMessage)}
-          </div>
-        )}
-
-        {/* Square Integration Section */}
-        <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 mb-6">
-          <div className="flex items-center gap-4 mb-6">
-            <div className="w-12 h-12 bg-black rounded-lg flex items-center justify-center">
-              <svg className="w-8 h-8 text-white" viewBox="0 0 24 24" fill="currentColor">
-                <path d="M4.5 2A2.5 2.5 0 002 4.5v15A2.5 2.5 0 004.5 22h15a2.5 2.5 0 002.5-2.5v-15A2.5 2.5 0 0019.5 2h-15zM8 7h8a1 1 0 011 1v8a1 1 0 01-1 1H8a1 1 0 01-1-1V8a1 1 0 011-1z"/>
-              </svg>
-            </div>
-            <div>
-              <h2 className="text-lg font-semibold text-gray-900">Square POS</h2>
-              <p className="text-sm text-gray-500">
-                Connect your Square account to sync menu items and track sales
-              </p>
-            </div>
-          </div>
-
-
-          {/* Store Connections */}
-          <h3 className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-3">
-            Store Connections
-          </h3>
-          <div className="space-y-3">
-            {stores.map((store) => {
-              const connection = getConnectionForStore(store.id);
-              return (
-                <div
-                  key={store.id}
-                  className="p-4 border border-gray-200 rounded-lg"
-                >
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <div className="font-medium text-gray-900">{store.name}</div>
-                      {connection ? (
-                        <div className="text-sm text-gray-500">
-                          Connected to {connection.name || connection.merchantId}
-                          {' '}&middot;{' '}
-                          {connection.catalogItemsCount} items synced
-                        </div>
-                      ) : (
-                        <div className="text-sm text-gray-500">Not connected</div>
-                      )}
-                    </div>
+        {/* Store Connections */}
+        <h3 className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-4">
+          Store Connections
+        </h3>
+        <div className="space-y-4">
+          {stores.map((store) => {
+            const connection = getConnectionForStore(store.id);
+            return (
+              <div
+                key={store.id}
+                className="p-4 bg-gray-50/50 border border-gray-200/50 rounded-xl"
+              >
+                <div className="flex items-center justify-between">
+                  <div>
                     <div className="flex items-center gap-2">
-                      {connection ? (
-                        <>
-                          <button
-                            onClick={() => handleSyncCatalog(connection.id)}
-                            disabled={syncing === connection.id}
-                            className="px-3 py-1.5 text-sm font-medium text-blue-600 hover:bg-blue-50 rounded-lg transition disabled:opacity-50"
-                          >
-                            {syncing === connection.id ? 'Syncing...' : 'Sync Catalog'}
-                          </button>
-                          <button
-                            onClick={() => handleSyncOrders(connection.id)}
-                            disabled={syncingOrders === connection.id}
-                            className="px-3 py-1.5 text-sm font-medium text-green-600 hover:bg-green-50 rounded-lg transition disabled:opacity-50"
-                          >
-                            {syncingOrders === connection.id ? 'Syncing...' : 'Sync Orders'}
-                          </button>
-                          <button
-                            onClick={() => handleDisconnect(connection.id)}
-                            disabled={disconnecting === connection.id}
-                            className="px-3 py-1.5 text-sm font-medium text-red-600 hover:bg-red-50 rounded-lg transition disabled:opacity-50"
-                          >
-                            {disconnecting === connection.id ? '...' : 'Disconnect'}
-                          </button>
-                        </>
-                      ) : (
-                        <button
-                          onClick={() => handleConnect(store.id)}
-                          disabled={connecting === store.id}
-                          className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium rounded-lg transition disabled:opacity-50"
-                        >
-                          {connecting === store.id ? 'Connecting...' : 'Connect Square'}
-                        </button>
+                      <span className="font-semibold text-gray-900">{store.name}</span>
+                      {connection && (
+                        <Badge variant="success">Connected</Badge>
                       )}
                     </div>
+                    {connection ? (
+                      <div className="text-sm text-gray-500 mt-1">
+                        {connection.name || connection.merchantId} • {connection.catalogItemsCount} items synced
+                      </div>
+                    ) : (
+                      <div className="text-sm text-gray-400 mt-1">Not connected</div>
+                    )}
                   </div>
-                  {connection && (
-                    <div className="mt-3 pt-3 border-t border-gray-100 flex gap-4 text-xs text-gray-500">
-                      <span>Last catalog sync: {formatDate(connection.lastCatalogSync)}</span>
-                      <span>Last order sync: {formatDate(connection.lastOrderSync)}</span>
-                    </div>
-                  )}
+                  <div className="flex items-center gap-2">
+                    {connection ? (
+                      <>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => handleSyncCatalog(connection.id)}
+                          disabled={syncing === connection.id}
+                        >
+                          {syncing === connection.id ? 'Syncing...' : 'Sync Catalog'}
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => handleSyncOrders(connection.id)}
+                          disabled={syncingOrders === connection.id}
+                          className="text-green-600 hover:text-green-700"
+                        >
+                          {syncingOrders === connection.id ? 'Syncing...' : 'Sync Orders'}
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => handleDisconnect(connection.id)}
+                          disabled={disconnecting === connection.id}
+                          className="text-red-600 hover:text-red-700"
+                        >
+                          {disconnecting === connection.id ? '...' : 'Disconnect'}
+                        </Button>
+                      </>
+                    ) : (
+                      <Button
+                        onClick={() => handleConnect(store.id)}
+                        disabled={connecting === store.id}
+                        size="sm"
+                      >
+                        {connecting === store.id ? 'Connecting...' : 'Connect Square'}
+                      </Button>
+                    )}
+                  </div>
                 </div>
-              );
-            })}
-          </div>
+                {connection && (
+                  <div className="mt-3 pt-3 border-t border-gray-200/50 flex gap-6 text-xs text-gray-500">
+                    <span>Last catalog sync: {formatDate(connection.lastCatalogSync)}</span>
+                    <span>Last order sync: {formatDate(connection.lastOrderSync)}</span>
+                  </div>
+                )}
+              </div>
+            );
+          })}
         </div>
+      </Card>
 
-        {/* Connected Stores with Catalog */}
-        {connections.length > 0 && (
-          <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
-            <h3 className="text-lg font-semibold text-gray-900 mb-4">
+      {/* Connected Stores with Catalog */}
+      {connections.length > 0 && (
+        <Card>
+          <div className="flex items-center justify-between mb-6">
+            <h3 className="text-lg font-semibold text-gray-900">
               Square Catalog Items
             </h3>
-            <div className="flex items-center justify-between mb-4">
-              <p className="text-sm text-gray-500">
-                After syncing, import items or map them to recipes.
-              </p>
-              <div className="flex gap-2">
-                <Link
-                  href="/settings/integrations/import"
-                  className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium rounded-lg transition"
-                >
-                  Import Items
-                </Link>
-                <Link
-                  href="/recipes/mappings"
-                  className="px-3 py-1.5 bg-gray-100 hover:bg-gray-200 text-gray-700 text-sm font-medium rounded-lg transition"
-                >
-                  Manage Mappings
-                </Link>
-              </div>
+            <div className="flex gap-2">
+              <LinkButton
+                href="/settings/integrations/import"
+                size="sm"
+              >
+                Import Items
+              </LinkButton>
+              <LinkButton
+                href="/recipes/mappings"
+                variant="secondary"
+                size="sm"
+              >
+                Manage Mappings
+              </LinkButton>
             </div>
-            {connections.map((connection) => (
-              <div key={connection.id} className="mb-4 last:mb-0">
-                <h4 className="text-sm font-medium text-gray-700 mb-2">
-                  {connection.store.name}
-                </h4>
-                <div className="grid grid-cols-3 gap-4">
-                  <div className="p-3 bg-gray-50 rounded-lg">
-                    <div className="text-2xl font-bold text-gray-900">
-                      {connection.catalogItemsCount}
-                    </div>
-                    <div className="text-xs text-gray-500">Items Synced</div>
+          </div>
+          <p className="text-sm text-gray-500 mb-6">
+            After syncing, import items or map them to recipes.
+          </p>
+
+          {connections.map((connection) => (
+            <div key={connection.id} className="mb-6 last:mb-0">
+              <h4 className="text-sm font-medium text-gray-700 mb-3">
+                {connection.store.name}
+              </h4>
+              <div className="grid grid-cols-3 gap-4">
+                <div className="p-4 bg-gradient-to-br from-blue-50 to-indigo-50/50 rounded-xl border border-blue-100/50">
+                  <div className="text-2xl font-bold text-gray-900">
+                    {connection.catalogItemsCount}
                   </div>
-                  <div className="p-3 bg-gray-50 rounded-lg">
-                    <div className="text-2xl font-bold text-gray-900">
-                      {connection.orderSyncsCount}
-                    </div>
-                    <div className="text-xs text-gray-500">Orders Processed</div>
+                  <div className="text-xs text-gray-500">Items Synced</div>
+                </div>
+                <div className="p-4 bg-gradient-to-br from-purple-50 to-pink-50/50 rounded-xl border border-purple-100/50">
+                  <div className="text-2xl font-bold text-gray-900">
+                    {connection.orderSyncsCount}
                   </div>
-                  <div className="p-3 bg-gray-50 rounded-lg">
-                    <div className="text-2xl font-bold text-green-600">
-                      {connection.syncEnabled ? 'Active' : 'Paused'}
-                    </div>
-                    <div className="text-xs text-gray-500">Sync Status</div>
+                  <div className="text-xs text-gray-500">Orders Processed</div>
+                </div>
+                <div className="p-4 bg-gradient-to-br from-green-50 to-emerald-50/50 rounded-xl border border-green-100/50">
+                  <div className={`text-2xl font-bold ${connection.syncEnabled ? 'text-green-600' : 'text-gray-400'}`}>
+                    {connection.syncEnabled ? 'Active' : 'Paused'}
                   </div>
+                  <div className="text-xs text-gray-500">Sync Status</div>
                 </div>
               </div>
-            ))}
-          </div>
-        )}
-      </main>
-    </div>
+            </div>
+          ))}
+        </Card>
+      )}
+    </PageLayout>
   );
 }
 
@@ -373,12 +367,14 @@ export default function IntegrationsPage() {
   return (
     <Suspense
       fallback={
-        <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-          <div className="text-center">
-            <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
-            <p className="mt-4 text-gray-600">Loading...</p>
+        <PageLayout title="Integrations" backHref="/dashboard" showNav={false}>
+          <div className="flex items-center justify-center py-20">
+            <div className="text-center">
+              <div className="inline-block h-8 w-8 animate-spin rounded-full border-4 border-solid border-blue-600 border-r-transparent"></div>
+              <p className="mt-4 text-gray-500">Loading...</p>
+            </div>
           </div>
-        </div>
+        </PageLayout>
       }
     >
       <IntegrationsContent />
