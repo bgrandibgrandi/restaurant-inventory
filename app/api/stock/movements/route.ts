@@ -38,7 +38,14 @@ export async function GET(request: NextRequest) {
       prisma.stockMovement.findMany({
         where,
         include: {
-          item: { select: { id: true, name: true, unit: true } },
+          item: {
+            select: {
+              id: true,
+              name: true,
+              unit: true,
+              category: { select: { id: true, name: true } },
+            },
+          },
           store: { select: { id: true, name: true } },
         },
         orderBy: { createdAt: 'desc' },
@@ -48,8 +55,29 @@ export async function GET(request: NextRequest) {
       prisma.stockMovement.count({ where }),
     ]);
 
+    // Fetch related invoices for movements that have invoice references
+    const movementsWithInvoices = await Promise.all(
+      movements.map(async (movement) => {
+        let invoice = null;
+        if (movement.referenceType === 'invoice' && movement.referenceId) {
+          invoice = await prisma.invoice.findUnique({
+            where: { id: movement.referenceId },
+            select: {
+              id: true,
+              invoiceNumber: true,
+              supplierName: true,
+              invoiceDate: true,
+              totalAmount: true,
+              fileName: true,
+            },
+          });
+        }
+        return { ...movement, invoice };
+      })
+    );
+
     return NextResponse.json({
-      movements,
+      movements: movementsWithInvoices,
       total,
       limit,
       offset,
