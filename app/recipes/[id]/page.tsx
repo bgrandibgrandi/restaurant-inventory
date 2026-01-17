@@ -51,6 +51,7 @@ export default function RecipeDetailPage() {
   const [recipe, setRecipe] = useState<Recipe | null>(null);
   const [loading, setLoading] = useState(true);
   const [deleting, setDeleting] = useState(false);
+  const [converting, setConverting] = useState(false);
 
   useEffect(() => {
     fetchRecipe();
@@ -111,6 +112,33 @@ export default function RecipeDetailPage() {
     }
   };
 
+  const handleConvertToItem = async () => {
+    if (!confirm('Are you sure you want to convert this recipe to an inventory item? This will delete the recipe and create a new item with the same name. This action cannot be undone.')) {
+      return;
+    }
+
+    setConverting(true);
+    try {
+      const response = await fetch(`/api/recipes/${params.id}/convert-to-item`, {
+        method: 'POST',
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        alert(data.message);
+        router.push(`/items/${data.item.id}/edit`);
+      } else {
+        const error = await response.json();
+        alert(error.error || 'Failed to convert recipe');
+      }
+    } catch (error) {
+      console.error('Error converting recipe:', error);
+      alert('An error occurred');
+    } finally {
+      setConverting(false);
+    }
+  };
+
   const formatCurrency = (amount: number) => {
     return new Intl.NumberFormat('de-DE', {
       style: 'currency',
@@ -159,6 +187,14 @@ export default function RecipeDetailPage() {
               <h1 className="text-xl font-semibold text-gray-900 truncate">{recipe.name}</h1>
             </div>
             <div className="flex items-center gap-2">
+              <button
+                onClick={handleConvertToItem}
+                disabled={converting}
+                className="px-3 py-1.5 bg-orange-100 hover:bg-orange-200 text-orange-700 text-sm font-medium rounded-lg transition disabled:opacity-50"
+                title="Convert this recipe to an inventory item"
+              >
+                {converting ? '...' : 'Convert to Item'}
+              </button>
               <Link
                 href={`/recipes/${recipe.id}/edit`}
                 className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium rounded-lg transition"
