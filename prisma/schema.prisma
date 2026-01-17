@@ -19,6 +19,7 @@ model Account {
   items         Item[]
   categories    Category[]
   stockEntries  StockEntry[]
+  stockCounts   StockCount[]
   roles         Role[]
 }
 
@@ -35,16 +36,17 @@ model Role {
 }
 
 model User {
-  id        String   @id @default(cuid())
-  email     String   @unique
-  name      String?
-  image     String?
-  accountId String
-  account   Account  @relation(fields: [accountId], references: [id])
-  roleId    String?
-  role      Role?    @relation(fields: [roleId], references: [id])
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id          String       @id @default(cuid())
+  email       String       @unique
+  name        String?
+  image       String?
+  accountId   String
+  account     Account      @relation(fields: [accountId], references: [id])
+  roleId      String?
+  role        Role?        @relation(fields: [roleId], references: [id])
+  stockCounts StockCount[]
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
 }
 
 model Store {
@@ -54,6 +56,7 @@ model Store {
   accountId    String
   account      Account      @relation(fields: [accountId], references: [id])
   stockEntries StockEntry[]
+  stockCounts  StockCount[]
   createdAt    DateTime     @default(now())
 }
 
@@ -87,17 +90,39 @@ model Category {
 
 // Actual Stock Entries (quantity + cost per store)
 model StockEntry {
-  id        String   @id @default(cuid())
-  itemId    String
-  item      Item     @relation(fields: [itemId], references: [id])
-  storeId   String
-  store     Store    @relation(fields: [storeId], references: [id])
-  quantity  Float
-  unitCost  Float?   // Optional cost
-  currency  String   @default("EUR")
-  accountId String
-  account   Account  @relation(fields: [accountId], references: [id])
-  notes     String?
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id           String      @id @default(cuid())
+  itemId       String
+  item         Item        @relation(fields: [itemId], references: [id])
+  storeId      String
+  store        Store       @relation(fields: [storeId], references: [id])
+  quantity     Float
+  unitCost     Float?      // Optional cost
+  currency     String      @default("EUR")
+  accountId    String
+  account      Account     @relation(fields: [accountId], references: [id])
+  notes        String?
+  stockCountId String?     // Link to count session if created during a count
+  stockCount   StockCount? @relation(fields: [stockCountId], references: [id])
+  createdAt    DateTime    @default(now())
+  updatedAt    DateTime    @updatedAt
+}
+
+// Stock Count Session - groups multiple stock entries from a single count
+model StockCount {
+  id           String       @id @default(cuid())
+  name         String?      // Optional name like "Weekly Count - Week 3"
+  storeId      String
+  store        Store        @relation(fields: [storeId], references: [id])
+  userId       String       // Who performed the count
+  user         User         @relation(fields: [userId], references: [id])
+  accountId    String
+  account      Account      @relation(fields: [accountId], references: [id])
+  status       String       @default("in_progress") // in_progress, completed, cancelled
+  entries      StockEntry[]
+  totalValue   Float?       // Calculated total value of count
+  itemsCounted Int          @default(0)
+  notes        String?
+  completedAt  DateTime?
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
 }

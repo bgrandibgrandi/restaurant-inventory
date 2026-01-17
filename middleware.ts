@@ -15,5 +15,6 @@ export const config = {
     '/categories/:path*',
     '/users/:path*',
     '/roles/:path*',
+    '/count/:path*',
   ],
 };
