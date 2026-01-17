@@ -44,7 +44,7 @@ export default function ImportSquareItemsPage() {
   const [importing, setImporting] = useState(false);
   const [selections, setSelections] = useState<Map<string, ImportSelection>>(new Map());
   const [selectAll, setSelectAll] = useState<ImportType>('skip');
-  const [result, setResult] = useState<{ recipes: number; items: number; skipped: number } | null>(null);
+  const [result, setResult] = useState<{ recipes: number; items: number; skipped: number; notFound: number } | null>(null);
 
   useEffect(() => {
     fetchData();
@@ -192,10 +192,19 @@ export default function ImportSquareItemsPage() {
             <p className="text-gray-600 mb-4">
               Created {result.recipes} recipes and {result.items} inventory items from Square.
             </p>
-            {result.skipped > 0 && (
-              <p className="text-sm text-yellow-600 mb-6">
-                {result.skipped} items were skipped (already exist with the same name).
-              </p>
+            {(result.skipped > 0 || result.notFound > 0) && (
+              <div className="text-sm mb-6 space-y-1">
+                {result.skipped > 0 && (
+                  <p className="text-yellow-600">
+                    {result.skipped} items were skipped (already exist with the same name).
+                  </p>
+                )}
+                {result.notFound > 0 && (
+                  <p className="text-red-600">
+                    {result.notFound} items were not found in the database (try syncing the catalog again).
+                  </p>
+                )}
+              </div>
             )}
             <div className="flex justify-center gap-4">
               {result.recipes > 0 && (

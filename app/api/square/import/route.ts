@@ -30,6 +30,7 @@ export async function POST(request: NextRequest) {
     let recipesCreated = 0;
     let itemsCreated = 0;
     let skippedDuplicates = 0;
+    let notFound = 0;
 
     // Get all catalog items in one query
     const catalogItemIds = items.map((i) => i.catalogItemId);
@@ -42,6 +43,11 @@ export async function POST(request: NextRequest) {
         variations: true,
       },
     });
+
+    console.log(`Import request: ${items.length} items requested, ${catalogItems.length} found in DB`);
+    console.log(`First 3 requested IDs:`, catalogItemIds.slice(0, 3));
+    console.log(`First 3 found IDs:`, catalogItems.slice(0, 3).map(c => c.id));
+    console.log(`Account ID:`, accountId);
 
     // Create a map for quick lookup
     const catalogMap = new Map(catalogItems.map((c) => [c.id, c]));
@@ -86,7 +92,10 @@ export async function POST(request: NextRequest) {
     // Process each import item
     for (const importItem of items) {
       const catalogItem = catalogMap.get(importItem.catalogItemId);
-      if (!catalogItem) continue;
+      if (!catalogItem) {
+        notFound++;
+        continue;
+      }
 
       // Determine category ID
       let categoryId: string | null = null;
@@ -148,6 +157,7 @@ export async function POST(request: NextRequest) {
       recipes: recipesCreated,
       items: itemsCreated,
       skipped: skippedDuplicates,
+      notFound: notFound,
     });
   } catch (error) {
     console.error('Error importing Square items:', error);
