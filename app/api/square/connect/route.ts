@@ -67,10 +67,10 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // Read-only scopes - this app never writes to Square
     const scopes = [
       'MERCHANT_PROFILE_READ',
       'ITEMS_READ',
-      'ITEMS_WRITE',
       'ORDERS_READ',
       'INVENTORY_READ',
     ].join('+');
