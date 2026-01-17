@@ -87,6 +87,7 @@ export default function EditRecipePage() {
   const [showIngredientSearch, setShowIngredientSearch] = useState(false);
   const [ingredientSearch, setIngredientSearch] = useState('');
   const [searchType, setSearchType] = useState<'item' | 'subrecipe'>('item');
+  const [improving, setImproving] = useState(false);
 
   useEffect(() => {
     fetchData();
@@ -195,6 +196,44 @@ export default function EditRecipePage() {
     setIngredients(ingredients.filter((ing) => ing.id !== id));
   };
 
+  const handleImproveText = async () => {
+    if (!formData.name && !formData.description && !formData.instructions) {
+      alert('No text to improve');
+      return;
+    }
+
+    setImproving(true);
+    try {
+      const response = await fetch('/api/recipes/improve', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: formData.name || null,
+          description: formData.description || null,
+          instructions: formData.instructions || null,
+        }),
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        setFormData({
+          ...formData,
+          name: data.improved.name || formData.name,
+          description: data.improved.description || formData.description,
+          instructions: data.improved.instructions || formData.instructions,
+        });
+      } else {
+        const err = await response.json();
+        alert(err.error || 'Failed to improve text');
+      }
+    } catch (error) {
+      console.error('Error improving text:', error);
+      alert('An error occurred');
+    } finally {
+      setImproving(false);
+    }
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
@@ -289,6 +328,18 @@ export default function EditRecipePage() {
               </Link>
               <h1 className="text-xl font-semibold text-gray-900">Edit Recipe</h1>
             </div>
+            <button
+              type="button"
+              onClick={handleImproveText}
+              disabled={improving}
+              className="inline-flex items-center px-3 py-1.5 bg-purple-100 hover:bg-purple-200 text-purple-700 text-sm font-medium rounded-lg transition disabled:opacity-50"
+              title="Fix typos and improve formatting with AI"
+            >
+              <svg className="w-4 h-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
+              </svg>
+              {improving ? 'Improving...' : 'Fix Typos'}
+            </button>
           </div>
         </div>
       </header>
