@@ -27,6 +27,13 @@ model Account {
   wasteReasons    WasteReason[]
   stockTransfers  StockTransfer[]
   notifications   Notification[]
+  // Recipe & Square integration
+  recipes               Recipe[]
+  squareConnection      SquareConnection?
+  squareCatalogItems    SquareCatalogItem[]
+  squareItemMappings    SquareItemMapping[]
+  squareModifierMappings SquareModifierMapping[]
+  squareOrderSyncs      SquareOrderSync[]
 }
 
 model Role {
@@ -92,6 +99,9 @@ model Item {
   sku                 String?             // Optional SKU/product code
   barcode             String?             // Optional barcode
   costPrice           Float?              // Default cost price
+  // Recipe relations
+  recipeIngredients   RecipeIngredient[]
+  squareModifierMappings SquareModifierMapping[]
   createdAt           DateTime            @default(now())
   updatedAt           DateTime            @updatedAt
 }
@@ -104,10 +114,11 @@ model Category {
   parent       Category?     @relation("CategoryToCategory", fields: [parentId], references: [id], onDelete: NoAction, onUpdate: NoAction)
   children     Category[]    @relation("CategoryToCategory")
   invoiceItems InvoiceItem[]
-  accountId String
-  account   Account  @relation(fields: [accountId], references: [id])
-  items     Item[]
-  createdAt DateTime @default(now())
+  accountId    String
+  account      Account       @relation(fields: [accountId], references: [id])
+  items        Item[]
+  recipes      Recipe[]
+  createdAt    DateTime      @default(now())
 }
 
 // Actual Stock Entries (quantity + cost per store)
@@ -330,4 +341,168 @@ model Notification {
   accountId String
   account   Account  @relation(fields: [accountId], references: [id])
   createdAt DateTime @default(now())
+}
+
+// ============================================
+// RECIPES & MENU COSTING
+// ============================================
+
+// Recipe/Menu Item definition
+model Recipe {
+  id              String             @id @default(cuid())
+  name            String
+  description     String?
+  yieldQuantity   Float              @default(1) // How many portions this recipe makes
+  yieldUnit       String             @default("portions") // "portions", "L", "kg", etc.
+  categoryId      String?
+  category        Category?          @relation(fields: [categoryId], references: [id])
+  isSubRecipe     Boolean            @default(false) // True for sauces, prep items that are used in other recipes
+  isActive        Boolean            @default(true)
+  instructions    String?            // Optional cooking instructions
+  prepTime        Int?               // Prep time in minutes
+  cookTime        Int?               // Cook time in minutes
+  accountId       String
+  account         Account            @relation(fields: [accountId], references: [id])
+  ingredients     RecipeIngredient[]
+  // Where this recipe is used as a sub-recipe
+  usedIn          RecipeIngredient[] @relation("SubRecipeIngredient")
+  // Square integration
+  squareItemMappings SquareItemMapping[]
+  createdAt       DateTime           @default(now())
+  updatedAt       DateTime           @updatedAt
+}
+
+// Ingredient in a recipe - can be an Item or another Recipe (sub-recipe)
+model RecipeIngredient {
+  id              String   @id @default(cuid())
+  recipeId        String
+  recipe          Recipe   @relation(fields: [recipeId], references: [id], onDelete: Cascade)
+  // Either an item or a sub-recipe (one must be set)
+  itemId          String?
+  item            Item?    @relation(fields: [itemId], references: [id])
+  subRecipeId     String?
+  subRecipe       Recipe?  @relation("SubRecipeIngredient", fields: [subRecipeId], references: [id])
+  quantity        Float    // Amount needed per recipe yield
+  unit            String   // Unit for this ingredient usage
+  notes           String?  // "diced", "julienned", etc.
+  wasteFactor     Float    @default(0) // Percentage of waste (0.1 = 10% waste, so need 10% more)
+  createdAt       DateTime @default(now())
+}
+
+// ============================================
+// SQUARE POS INTEGRATION
+// ============================================
+
+// Square OAuth connection per account
+model SquareConnection {
+  id                String   @id @default(cuid())
+  accountId         String   @unique
+  account           Account  @relation(fields: [accountId], references: [id])
+  merchantId        String   // Square merchant ID
+  accessToken       String   // Encrypted access token
+  refreshToken      String?  // Encrypted refresh token
+  tokenExpiresAt    DateTime?
+  locationIds       String?  // JSON array of Square location IDs to sync
+  lastSyncAt        DateTime?
+  syncEnabled       Boolean  @default(true)
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+}
+
+// Synced Square catalog items
+model SquareCatalogItem {
+  id                String              @id @default(cuid())
+  squareId          String              // Square's object ID
+  accountId         String
+  account           Account             @relation(fields: [accountId], references: [id])
+  name              String
+  description       String?
+  categoryName      String?             // Square category
+  variations        SquareItemVariation[]
+  modifiers         SquareModifier[]
+  mappings          SquareItemMapping[]
+  isActive          Boolean             @default(true)
+  lastSyncedAt      DateTime            @default(now())
+  createdAt         DateTime            @default(now())
+
+  @@unique([squareId, accountId])
+}
+
+// Variations of a Square item (e.g., Small, Medium, Large)
+model SquareItemVariation {
+  id              String            @id @default(cuid())
+  squareId        String            // Square's variation object ID
+  catalogItemId   String
+  catalogItem     SquareCatalogItem @relation(fields: [catalogItemId], references: [id], onDelete: Cascade)
+  name            String            // "Small", "Large", etc.
+  priceMoney      Float?            // Price in cents
+  sku             String?
+  mappings        SquareItemMapping[]
+
+  @@unique([squareId, catalogItemId])
+}
+
+// Square modifiers (e.g., "Extra Cheese", "No Onions")
+model SquareModifier {
+  id              String            @id @default(cuid())
+  squareId        String            // Square's modifier object ID
+  catalogItemId   String
+  catalogItem     SquareCatalogItem @relation(fields: [catalogItemId], references: [id], onDelete: Cascade)
+  name            String
+  priceMoney      Float?            // Additional price
+  // Mapping to recipe ingredient additions
+  mappings        SquareModifierMapping[]
+
+  @@unique([squareId, catalogItemId])
+}
+
+// Map Square item/variation to a Recipe
+model SquareItemMapping {
+  id              String               @id @default(cuid())
+  catalogItemId   String
+  catalogItem     SquareCatalogItem    @relation(fields: [catalogItemId], references: [id], onDelete: Cascade)
+  variationId     String?              // If mapping specific variation
+  variation       SquareItemVariation? @relation(fields: [variationId], references: [id])
+  recipeId        String
+  recipe          Recipe               @relation(fields: [recipeId], references: [id])
+  multiplier      Float                @default(1) // In case quantity differs
+  accountId       String
+  account         Account              @relation(fields: [accountId], references: [id])
+  createdAt       DateTime             @default(now())
+
+  @@unique([catalogItemId, variationId, accountId])
+}
+
+// Map Square modifiers to additional ingredients to deduct
+model SquareModifierMapping {
+  id            String         @id @default(cuid())
+  modifierId    String
+  modifier      SquareModifier @relation(fields: [modifierId], references: [id], onDelete: Cascade)
+  itemId        String         // Item to deduct when this modifier is used
+  item          Item           @relation(fields: [itemId], references: [id])
+  quantity      Float          // Amount to deduct
+  unit          String
+  accountId     String
+  account       Account        @relation(fields: [accountId], references: [id])
+  createdAt     DateTime       @default(now())
+
+  @@unique([modifierId, itemId, accountId])
+}
+
+// Track synced Square orders to prevent duplicate processing
+model SquareOrderSync {
+  id            String   @id @default(cuid())
+  squareOrderId String
+  accountId     String
+  account       Account  @relation(fields: [accountId], references: [id])
+  storeId       String   // Which store this order belongs to
+  orderDate     DateTime
+  totalMoney    Float?
+  itemCount     Int
+  status        String   @default("synced") // synced, processed, error
+  errorMessage  String?
+  processedAt   DateTime?
+  createdAt     DateTime @default(now())
+
+  @@unique([squareOrderId, accountId])
 }

@@ -19,5 +19,6 @@ export const config = {
     '/invoices/:path*',
     '/suppliers/:path*',
     '/settings/:path*',
+    '/recipes/:path*',
   ],
 };
