@@ -1,0 +1,133 @@
+import { NextRequest, NextResponse } from 'next/server';
+import { getServerSession } from 'next-auth';
+import { authOptions } from '@/lib/auth';
+import { prisma } from '@/lib/db';
+
+interface ImportItem {
+  catalogItemId: string;
+  importAs: 'recipe' | 'item';
+  useDescription: boolean;
+  useCategory: boolean;
+  usePrice: boolean;
+  categoryId: string | null;
+}
+
+// Import Square catalog items as Recipes or Items
+export async function POST(request: NextRequest) {
+  try {
+    const session = await getServerSession(authOptions);
+    if (!session?.user?.accountId) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    const { items }: { items: ImportItem[] } = await request.json();
+
+    if (!items || items.length === 0) {
+      return NextResponse.json({ error: 'No items to import' }, { status: 400 });
+    }
+
+    const accountId = session.user.accountId;
+    let recipesCreated = 0;
+    let itemsCreated = 0;
+
+    // Get all catalog items in one query
+    const catalogItemIds = items.map((i) => i.catalogItemId);
+    const catalogItems = await prisma.squareCatalogItem.findMany({
+      where: {
+        id: { in: catalogItemIds },
+        accountId,
+      },
+      include: {
+        variations: true,
+      },
+    });
+
+    // Create a map for quick lookup
+    const catalogMap = new Map(catalogItems.map((c) => [c.id, c]));
+
+    // Get or create categories based on Square category names
+    const squareCategoryNames = new Set<string>();
+    items.forEach((item) => {
+      if (item.useCategory) {
+        const catalogItem = catalogMap.get(item.catalogItemId);
+        if (catalogItem?.categoryName) {
+          squareCategoryNames.add(catalogItem.categoryName);
+        }
+      }
+    });
+
+    // Find or create categories for Square category names
+    const categoryNameToId = new Map<string, string>();
+    for (const categoryName of squareCategoryNames) {
+      let category = await prisma.category.findFirst({
+        where: { name: categoryName, accountId },
+      });
+      if (!category) {
+        category = await prisma.category.create({
+          data: { name: categoryName, accountId },
+        });
+      }
+      categoryNameToId.set(categoryName, category.id);
+    }
+
+    // Process each import item
+    for (const importItem of items) {
+      const catalogItem = catalogMap.get(importItem.catalogItemId);
+      if (!catalogItem) continue;
+
+      // Determine category ID
+      let categoryId: string | null = null;
+      if (importItem.useCategory && catalogItem.categoryName) {
+        categoryId = categoryNameToId.get(catalogItem.categoryName) || null;
+      } else if (importItem.categoryId) {
+        categoryId = importItem.categoryId;
+      }
+
+      // Get price from first variation if available
+      const firstVariation = catalogItem.variations[0];
+      const priceInCents = firstVariation?.priceMoney;
+
+      if (importItem.importAs === 'recipe') {
+        // Create Recipe
+        await prisma.recipe.create({
+          data: {
+            name: catalogItem.name,
+            description: importItem.useDescription ? catalogItem.description : null,
+            categoryId,
+            accountId,
+            yieldQuantity: 1,
+            yieldUnit: 'portions',
+            isSubRecipe: false,
+            isActive: true,
+          },
+        });
+        recipesCreated++;
+      } else if (importItem.importAs === 'item') {
+        // Create Inventory Item
+        await prisma.item.create({
+          data: {
+            name: catalogItem.name,
+            description: importItem.useDescription ? catalogItem.description : null,
+            categoryId,
+            accountId,
+            unit: 'pieces', // Default unit, can be changed later
+            costPrice: importItem.usePrice && priceInCents ? priceInCents / 100 : null,
+            sku: firstVariation?.sku,
+          },
+        });
+        itemsCreated++;
+      }
+    }
+
+    return NextResponse.json({
+      recipes: recipesCreated,
+      items: itemsCreated,
+    });
+  } catch (error) {
+    console.error('Error importing Square items:', error);
+    return NextResponse.json(
+      { error: 'Failed to import items' },
+      { status: 500 }
+    );
+  }
+}

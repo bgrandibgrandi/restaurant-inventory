@@ -316,12 +316,25 @@ function IntegrationsContent() {
             <h3 className="text-lg font-semibold text-gray-900 mb-4">
               Square Catalog Items
             </h3>
-            <p className="text-sm text-gray-500 mb-4">
-              After syncing, map your Square items to recipes.{' '}
-              <Link href="/recipes/mappings" className="text-blue-600 hover:underline">
-                Manage Mappings
-              </Link>
-            </p>
+            <div className="flex items-center justify-between mb-4">
+              <p className="text-sm text-gray-500">
+                After syncing, import items or map them to recipes.
+              </p>
+              <div className="flex gap-2">
+                <Link
+                  href="/settings/integrations/import"
+                  className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium rounded-lg transition"
+                >
+                  Import Items
+                </Link>
+                <Link
+                  href="/recipes/mappings"
+                  className="px-3 py-1.5 bg-gray-100 hover:bg-gray-200 text-gray-700 text-sm font-medium rounded-lg transition"
+                >
+                  Manage Mappings
+                </Link>
+              </div>
+            </div>
             {connections.map((connection) => (
               <div key={connection.id} className="mb-4 last:mb-0">
                 <h4 className="text-sm font-medium text-gray-700 mb-2">
