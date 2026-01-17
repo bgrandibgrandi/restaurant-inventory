@@ -19,6 +19,7 @@ interface Item {
   name: string;
   unit: string;
   category: { id: string; name: string } | null;
+  isRecipe?: boolean;
 }
 
 interface WasteReason {
@@ -55,6 +56,7 @@ export default function RecordWaste() {
     quantity: '',
     wasteReasonId: '',
     notes: '',
+    isRecipe: false,
   });
 
   const [selectedItem, setSelectedItem] = useState<Item | null>(null);
@@ -78,9 +80,10 @@ export default function RecordWaste() {
 
   const fetchData = async () => {
     try {
-      const [storesRes, itemsRes, reasonsRes, categoriesRes] = await Promise.all([
+      const [storesRes, itemsRes, recipesRes, reasonsRes, categoriesRes] = await Promise.all([
         fetch('/api/stores'),
         fetch('/api/items'),
+        fetch('/api/recipes'),
         fetch('/api/waste-reasons'),
         fetch('/api/categories'),
       ]);
@@ -93,11 +96,29 @@ export default function RecordWaste() {
         }
       }
 
+      let allItems: Item[] = [];
+
       if (itemsRes.ok) {
         const data = await itemsRes.json();
-        setItems(data);
-        setFilteredItems(data);
+        allItems = data.map((item: Item) => ({ ...item, isRecipe: false }));
       }
+
+      if (recipesRes.ok) {
+        const recipesData = await recipesRes.json();
+        const recipeItems: Item[] = recipesData.map((recipe: { id: string; name: string; yieldUnit: string; category?: { id: string; name: string } | null }) => ({
+          id: recipe.id,
+          name: recipe.name,
+          unit: recipe.yieldUnit || 'portions',
+          category: recipe.category || null,
+          isRecipe: true,
+        }));
+        allItems = [...allItems, ...recipeItems];
+      }
+
+      // Sort all items alphabetically
+      allItems.sort((a, b) => a.name.localeCompare(b.name));
+      setItems(allItems);
+      setFilteredItems(allItems);
 
       if (reasonsRes.ok) {
         const data = await reasonsRes.json();
@@ -117,7 +138,7 @@ export default function RecordWaste() {
 
   const handleSelectItem = (item: Item) => {
     setSelectedItem(item);
-    setFormData((prev) => ({ ...prev, itemId: item.id }));
+    setFormData((prev) => ({ ...prev, itemId: item.id, isRecipe: item.isRecipe || false }));
     setSearchQuery('');
   };
 
@@ -192,6 +213,7 @@ export default function RecordWaste() {
           quantity: parseFloat(formData.quantity),
           wasteReasonId: formData.wasteReasonId,
           notes: formData.notes || null,
+          isRecipe: formData.isRecipe,
         }),
       });
 
@@ -272,7 +294,14 @@ export default function RecordWaste() {
             {selectedItem ? (
               <div className="flex items-center justify-between p-4 bg-red-50 rounded-lg border border-red-200">
                 <div>
-                  <div className="font-medium text-gray-900">{selectedItem.name}</div>
+                  <div className="font-medium text-gray-900 flex items-center gap-2">
+                    {selectedItem.name}
+                    {selectedItem.isRecipe && (
+                      <span className="px-2 py-0.5 text-xs font-medium bg-purple-100 text-purple-700 rounded-full">
+                        Recipe
+                      </span>
+                    )}
+                  </div>
                   <div className="text-sm text-gray-500">
                     {selectedItem.category?.name || 'No category'} • {selectedItem.unit}
                   </div>
@@ -281,7 +310,7 @@ export default function RecordWaste() {
                   type="button"
                   onClick={() => {
                     setSelectedItem(null);
-                    setFormData((prev) => ({ ...prev, itemId: '' }));
+                    setFormData((prev) => ({ ...prev, itemId: '', isRecipe: false }));
                   }}
                   className="text-red-600 hover:text-red-800 font-medium"
                 >
@@ -310,12 +339,19 @@ export default function RecordWaste() {
                 <div className="max-h-64 overflow-y-auto space-y-2">
                   {filteredItems.map((item) => (
                     <button
-                      key={item.id}
+                      key={`${item.isRecipe ? 'recipe' : 'item'}-${item.id}`}
                       type="button"
                       onClick={() => handleSelectItem(item)}
                       className="w-full text-left p-3 rounded-lg border border-gray-200 hover:border-red-300 hover:bg-red-50 transition"
                     >
-                      <div className="font-medium text-gray-900">{item.name}</div>
+                      <div className="font-medium text-gray-900 flex items-center gap-2">
+                        {item.name}
+                        {item.isRecipe && (
+                          <span className="px-2 py-0.5 text-xs font-medium bg-purple-100 text-purple-700 rounded-full">
+                            Recipe
+                          </span>
+                        )}
+                      </div>
                       <div className="text-sm text-gray-500">
                         {item.category?.name || 'No category'} • {item.unit}
                       </div>

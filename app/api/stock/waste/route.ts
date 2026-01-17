@@ -3,7 +3,7 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/db';
 
-// POST - Record waste for one or more items
+// POST - Record waste for one or more items (or recipes)
 export async function POST(request: NextRequest) {
   try {
     const session = await getServerSession(authOptions);
@@ -11,12 +11,29 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const { items, storeId } = await request.json();
+    const body = await request.json();
 
-    // items should be array of { itemId, quantity, reasonId, notes }
-    if (!items || !Array.isArray(items) || items.length === 0) {
+    // Support both single item format and array format
+    let items: any[];
+    let storeId: string;
+
+    if (body.items && Array.isArray(body.items)) {
+      // Array format: { items: [...], storeId }
+      items = body.items;
+      storeId = body.storeId;
+    } else if (body.itemId) {
+      // Single item format: { itemId, quantity, wasteReasonId, notes, storeId, isRecipe }
+      items = [{
+        itemId: body.itemId,
+        quantity: body.quantity,
+        reasonId: body.wasteReasonId,
+        notes: body.notes,
+        isRecipe: body.isRecipe,
+      }];
+      storeId = body.storeId;
+    } else {
       return NextResponse.json(
-        { error: 'Items array is required' },
+        { error: 'Items array or itemId is required' },
         { status: 400 }
       );
     }
@@ -37,21 +54,6 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Store not found' }, { status: 404 });
     }
 
-    // Validate all items exist
-    const itemIds = items.map((i: any) => i.itemId);
-    const dbItems = await prisma.item.findMany({
-      where: { id: { in: itemIds }, accountId: session.user.accountId },
-    });
-
-    if (dbItems.length !== itemIds.length) {
-      return NextResponse.json(
-        { error: 'One or more items not found' },
-        { status: 404 }
-      );
-    }
-
-    const itemMap = new Map(dbItems.map((i) => [i.id, i]));
-
     // Get waste reason names for the reason field
     const reasonIds = [...new Set(items.map((i: any) => i.reasonId).filter(Boolean))];
     const reasons = await prisma.wasteReason.findMany({
@@ -61,29 +63,123 @@ export async function POST(request: NextRequest) {
 
     // Create movements for each waste item
     const movements = [];
-    for (const wasteItem of items) {
-      const item = itemMap.get(wasteItem.itemId);
-      if (!item) continue;
 
-      const movement = await prisma.stockMovement.create({
-        data: {
-          itemId: wasteItem.itemId,
-          storeId,
-          quantity: -Math.abs(wasteItem.quantity), // Always negative for waste
-          type: 'WASTE',
-          reason: wasteItem.reasonId ? reasonMap.get(wasteItem.reasonId) : null,
-          notes: wasteItem.notes,
-          costPrice: item.costPrice,
-          referenceId: wasteItem.reasonId,
-          referenceType: 'waste_reason',
-          createdBy: session.user.id,
-          accountId: session.user.accountId,
-        },
-        include: {
-          item: { select: { id: true, name: true, unit: true } },
-        },
-      });
-      movements.push(movement);
+    for (const wasteItem of items) {
+      if (wasteItem.isRecipe) {
+        // Handle recipe waste - deduct ingredients
+        const recipe = await prisma.recipe.findFirst({
+          where: { id: wasteItem.itemId, accountId: session.user.accountId },
+          include: {
+            ingredients: {
+              include: {
+                item: true,
+                subRecipe: {
+                  include: {
+                    ingredients: {
+                      include: { item: true },
+                    },
+                  },
+                },
+              },
+            },
+          },
+        });
+
+        if (!recipe) {
+          return NextResponse.json({ error: 'Recipe not found' }, { status: 404 });
+        }
+
+        // Calculate ingredient quantities based on recipe yield and waste quantity
+        const wasteQty = wasteItem.quantity;
+        const yieldQty = recipe.yieldQuantity || 1;
+        const multiplier = wasteQty / yieldQty;
+
+        // Deduct each ingredient
+        for (const ingredient of recipe.ingredients) {
+          if (ingredient.item) {
+            // Direct ingredient
+            const ingredientQty = ingredient.quantity * multiplier * (1 + (ingredient.wasteFactor || 0));
+
+            const movement = await prisma.stockMovement.create({
+              data: {
+                itemId: ingredient.itemId!,
+                storeId,
+                quantity: -Math.abs(ingredientQty),
+                type: 'WASTE',
+                reason: wasteItem.reasonId ? reasonMap.get(wasteItem.reasonId) : null,
+                notes: `Recipe waste: ${recipe.name} (${wasteQty} ${recipe.yieldUnit})${wasteItem.notes ? ` - ${wasteItem.notes}` : ''}`,
+                costPrice: ingredient.item.costPrice,
+                referenceId: recipe.id,
+                referenceType: 'recipe',
+                createdBy: session.user.id,
+                accountId: session.user.accountId,
+              },
+              include: {
+                item: { select: { id: true, name: true, unit: true } },
+              },
+            });
+            movements.push(movement);
+          } else if (ingredient.subRecipe) {
+            // Sub-recipe - deduct its ingredients
+            const subMultiplier = (ingredient.quantity * multiplier) / (ingredient.subRecipe.yieldQuantity || 1);
+
+            for (const subIngredient of ingredient.subRecipe.ingredients) {
+              if (subIngredient.item) {
+                const subQty = subIngredient.quantity * subMultiplier * (1 + (subIngredient.wasteFactor || 0));
+
+                const movement = await prisma.stockMovement.create({
+                  data: {
+                    itemId: subIngredient.itemId!,
+                    storeId,
+                    quantity: -Math.abs(subQty),
+                    type: 'WASTE',
+                    reason: wasteItem.reasonId ? reasonMap.get(wasteItem.reasonId) : null,
+                    notes: `Recipe waste: ${recipe.name} > ${ingredient.subRecipe.name}${wasteItem.notes ? ` - ${wasteItem.notes}` : ''}`,
+                    costPrice: subIngredient.item.costPrice,
+                    referenceId: recipe.id,
+                    referenceType: 'recipe',
+                    createdBy: session.user.id,
+                    accountId: session.user.accountId,
+                  },
+                  include: {
+                    item: { select: { id: true, name: true, unit: true } },
+                  },
+                });
+                movements.push(movement);
+              }
+            }
+          }
+        }
+      } else {
+        // Handle regular item waste
+        const item = await prisma.item.findFirst({
+          where: { id: wasteItem.itemId, accountId: session.user.accountId },
+        });
+
+        if (!item) {
+          return NextResponse.json({ error: 'Item not found' }, { status: 404 });
+        }
+
+        const movement = await prisma.stockMovement.create({
+          data: {
+            itemId: wasteItem.itemId,
+            storeId,
+            quantity: -Math.abs(wasteItem.quantity),
+            type: 'WASTE',
+            reason: wasteItem.reasonId ? reasonMap.get(wasteItem.reasonId) : null,
+            notes: wasteItem.notes,
+            costPrice: item.costPrice,
+            referenceId: wasteItem.reasonId,
+            referenceType: 'waste_reason',
+            createdBy: session.user.id,
+            accountId: session.user.accountId,
+          },
+          include: {
+            item: { select: { id: true, name: true, unit: true } },
+          },
+        });
+        movements.push(movement);
+      }
     }
 
     // Calculate total waste value
