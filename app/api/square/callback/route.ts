@@ -61,10 +61,17 @@ export async function GET(request: NextRequest) {
 
     if (!tokenResponse.ok) {
       const errorData = await tokenResponse.json();
-      console.error('Square token exchange error:', errorData);
-      const errorMessage = errorData.message || errorData.error || 'Failed to exchange authorization code';
+      console.error('Square token exchange error:', JSON.stringify(errorData, null, 2));
+      console.error('Request details:', {
+        url: `${baseUrl}/oauth2/token`,
+        client_id: process.env.SQUARE_APPLICATION_ID,
+        client_secret_prefix: process.env.SQUARE_APPLICATION_SECRET?.substring(0, 10),
+        redirect_uri: `${process.env.NEXTAUTH_URL}/api/square/callback`,
+      });
+      // Extract error from Square's error format
+      const squareError = errorData.errors?.[0]?.detail || errorData.message || errorData.error || 'Failed to exchange authorization code';
       return NextResponse.redirect(
-        new URL(`/settings/integrations?error=${encodeURIComponent(errorMessage)}`, request.url)
+        new URL(`/settings/integrations?error=${encodeURIComponent(squareError)}`, request.url)
       );
     }
 
