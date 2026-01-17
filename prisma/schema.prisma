@@ -21,6 +21,8 @@ model Account {
   stockEntries  StockEntry[]
   stockCounts   StockCount[]
   roles         Role[]
+  suppliers     Supplier[]
+  invoices      Invoice[]
 }
 
 model Role {
@@ -45,6 +47,7 @@ model User {
   roleId      String?
   role        Role?        @relation(fields: [roleId], references: [id])
   stockCounts StockCount[]
+  invoices    Invoice[]
   createdAt   DateTime     @default(now())
   updatedAt   DateTime     @updatedAt
 }
@@ -57,14 +60,16 @@ model Store {
   account      Account      @relation(fields: [accountId], references: [id])
   stockEntries StockEntry[]
   stockCounts  StockCount[]
+  invoices     Invoice[]
   createdAt    DateTime     @default(now())
 }
 
 // Reusable Item Master (like a product catalog)
 model Item {
-  id           String       @id @default(cuid())
-  name         String
-  description  String?
+  id            String        @id @default(cuid())
+  name          String
+  description   String?
+  invoiceItems  InvoiceItem[]
   unit         String       // kg, L, pieces, etc.
   categoryId   String?
   category     Category?    @relation(fields: [categoryId], references: [id])
@@ -77,11 +82,12 @@ model Item {
 
 // Reusable Categories
 model Category {
-  id        String   @id @default(cuid())
-  name      String
-  parentId  String?
-  parent    Category? @relation("CategoryToCategory", fields: [parentId], references: [id], onDelete: NoAction, onUpdate: NoAction)
-  children  Category[] @relation("CategoryToCategory")
+  id           String        @id @default(cuid())
+  name         String
+  parentId     String?
+  parent       Category?     @relation("CategoryToCategory", fields: [parentId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  children     Category[]    @relation("CategoryToCategory")
+  invoiceItems InvoiceItem[]
   accountId String
   account   Account  @relation(fields: [accountId], references: [id])
   items     Item[]
@@ -125,4 +131,69 @@ model StockCount {
   completedAt  DateTime?
   createdAt    DateTime     @default(now())
   updatedAt    DateTime     @updatedAt
+}
+
+// Supplier/Vendor
+model Supplier {
+  id        String    @id @default(cuid())
+  name      String
+  email     String?
+  phone     String?
+  address   String?
+  notes     String?
+  accountId String
+  account   Account   @relation(fields: [accountId], references: [id])
+  invoices  Invoice[]
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+}
+
+// Invoice import for tracking purchases
+model Invoice {
+  id              String        @id @default(cuid())
+  invoiceNumber   String?       // Original invoice number from supplier
+  supplierId      String?
+  supplier        Supplier?     @relation(fields: [supplierId], references: [id])
+  supplierName    String?       // Extracted supplier name (before linking)
+  storeId         String
+  store           Store         @relation(fields: [storeId], references: [id])
+  userId          String        // Who uploaded it
+  user            User          @relation(fields: [userId], references: [id])
+  accountId       String
+  account         Account       @relation(fields: [accountId], references: [id])
+  invoiceDate     DateTime?     // Date on the invoice
+  totalAmount     Float?        // Total invoice amount
+  currency        String        @default("EUR")
+  status          String        @default("pending") // pending, processing, reviewed, confirmed, error
+  fileUrl         String?       // Stored file URL/path
+  fileName        String?
+  extractedData   String?       // JSON of AI-extracted data
+  items           InvoiceItem[]
+  notes           String?
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+}
+
+// Individual line items extracted from invoice
+model InvoiceItem {
+  id             String   @id @default(cuid())
+  invoiceId      String
+  invoice        Invoice  @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  // Extracted fields
+  rawName        String   // Original name from invoice
+  quantity       Float
+  unit           String?  // Extracted unit (kg, L, pieces, etc.)
+  unitPrice      Float?
+  totalPrice     Float?
+  // Matching to existing items
+  matchedItemId  String?  // If matched to existing Item
+  matchedItem    Item?    @relation(fields: [matchedItemId], references: [id])
+  suggestedName  String?  // AI-suggested clean name for new item
+  suggestedUnit  String?  // AI-suggested unit
+  categoryId     String?  // Suggested category
+  category       Category? @relation(fields: [categoryId], references: [id])
+  // Status
+  status         String   @default("pending") // pending, confirmed, skipped, created
+  createdItemId  String?  // If a new item was created from this
+  createdAt      DateTime @default(now())
 }
