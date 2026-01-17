@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useMemo, useRef } from 'react';
 import Link from 'next/link';
+import PageLayout, { Card, LinkButton, Badge, EmptyState } from '@/components/ui/PageLayout';
 
 interface Category {
   id: string;
@@ -59,7 +60,6 @@ export default function ItemsPage() {
   }, []);
 
   useEffect(() => {
-    // Focus input when editing starts
     if (editingItemId && editingField && inputRef.current) {
       inputRef.current.focus();
       if (inputRef.current instanceof HTMLInputElement) {
@@ -86,12 +86,10 @@ export default function ItemsPage() {
     }
   };
 
-  // Get unique units for filter
   const uniqueUnits = useMemo(() => {
     return [...new Set(items.map((item) => item.unit))].sort();
   }, [items]);
 
-  // Filtered items
   const filteredItems = useMemo(() => {
     return items.filter((item) => {
       const matchesSearch =
@@ -272,7 +270,7 @@ export default function ItemsPage() {
     return (
       <div
         onDoubleClick={() => startEditing(item, field)}
-        className={`cursor-pointer hover:bg-gray-100 rounded px-1 py-0.5 -mx-1 transition ${className || ''}`}
+        className={`cursor-pointer hover:bg-blue-50/50 rounded-lg px-2 py-1 -mx-2 transition ${className || ''}`}
         title="Double-click to edit"
       >
         {content}
@@ -292,13 +290,13 @@ export default function ItemsPage() {
             onKeyDown={handleKeyDown}
             onBlur={saveEditing}
             disabled={saving}
-            className="w-full px-2 py-1 border border-blue-400 rounded text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none"
+            className="w-full px-3 py-1.5 border border-blue-400 rounded-lg text-sm focus:ring-2 focus:ring-blue-500/20 focus:outline-none bg-white"
           />
         );
 
       case 'category':
         return (
-          <div className="space-y-1">
+          <div className="space-y-2">
             <select
               ref={inputRef as React.RefObject<HTMLSelectElement>}
               value={editValue}
@@ -312,7 +310,7 @@ export default function ItemsPage() {
               onKeyDown={handleKeyDown}
               onBlur={() => !showNewCategory && saveEditing()}
               disabled={saving}
-              className="w-full px-2 py-1 border border-blue-400 rounded text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none"
+              className="w-full px-3 py-1.5 border border-blue-400 rounded-lg text-sm focus:ring-2 focus:ring-blue-500/20 focus:outline-none bg-white"
             >
               <option value="">No Category</option>
               {categories.map((cat) => (
@@ -323,7 +321,7 @@ export default function ItemsPage() {
               <option value="__new__">+ Add New Category</option>
             </select>
             {showNewCategory && (
-              <div className="flex gap-1">
+              <div className="flex gap-2">
                 <input
                   type="text"
                   value={newCategoryName}
@@ -339,23 +337,14 @@ export default function ItemsPage() {
                   }}
                   placeholder="Category name..."
                   autoFocus
-                  className="flex-1 px-2 py-1 border border-gray-300 rounded text-sm"
+                  className="flex-1 px-3 py-1.5 border border-gray-300 rounded-lg text-sm bg-white"
                 />
                 <button
                   onClick={createNewCategory}
                   disabled={creatingCategory || !newCategoryName.trim()}
-                  className="px-2 py-1 bg-green-600 text-white rounded text-xs disabled:opacity-50"
+                  className="px-3 py-1.5 bg-gradient-to-r from-green-500 to-emerald-600 text-white rounded-lg text-xs font-medium disabled:opacity-50"
                 >
                   {creatingCategory ? '...' : 'Add'}
-                </button>
-                <button
-                  onClick={() => {
-                    setShowNewCategory(false);
-                    setNewCategoryName('');
-                  }}
-                  className="px-2 py-1 bg-gray-200 text-gray-700 rounded text-xs"
-                >
-                  Cancel
                 </button>
               </div>
             )}
@@ -371,7 +360,7 @@ export default function ItemsPage() {
             onKeyDown={handleKeyDown}
             onBlur={saveEditing}
             disabled={saving}
-            className="w-full px-2 py-1 border border-blue-400 rounded text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none"
+            className="w-full px-3 py-1.5 border border-blue-400 rounded-lg text-sm focus:ring-2 focus:ring-blue-500/20 focus:outline-none bg-white"
           >
             <option value="">No Supplier</option>
             {suppliers.map((sup) => (
@@ -391,7 +380,7 @@ export default function ItemsPage() {
             onKeyDown={handleKeyDown}
             onBlur={saveEditing}
             disabled={saving}
-            className="w-24 px-2 py-1 border border-blue-400 rounded text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none"
+            className="w-28 px-3 py-1.5 border border-blue-400 rounded-lg text-sm focus:ring-2 focus:ring-blue-500/20 focus:outline-none bg-white"
           >
             <option value="kg">kg</option>
             <option value="g">g</option>
@@ -419,7 +408,7 @@ export default function ItemsPage() {
               onKeyDown={handleKeyDown}
               onBlur={saveEditing}
               disabled={saving}
-              className="w-20 px-2 py-1 border border-blue-400 rounded text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none"
+              className="w-24 px-3 py-1.5 border border-blue-400 rounded-lg text-sm focus:ring-2 focus:ring-blue-500/20 focus:outline-none bg-white"
             />
           </div>
         );
@@ -429,293 +418,277 @@ export default function ItemsPage() {
     }
   };
 
+  const headerActions = (
+    <LinkButton href="/items/new" variant="primary" size="sm">
+      <svg className="w-4 h-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+      </svg>
+      New Item
+    </LinkButton>
+  );
+
   return (
-    <div className="min-h-screen bg-gray-50">
-      {/* Header */}
-      <header className="bg-white border-b border-gray-200 sticky top-0 z-10">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between items-center h-16">
-            <div className="flex items-center gap-4">
-              <Link href="/dashboard" className="text-gray-600 hover:text-gray-900">
-                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-                </svg>
-              </Link>
-              <h1 className="text-xl font-semibold text-gray-900">Manage Items</h1>
-            </div>
-            <Link
-              href="/items/new"
-              className="inline-flex items-center px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium rounded-lg transition shadow-sm"
-            >
-              <svg className="w-5 h-5 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-              </svg>
-              New Item
-            </Link>
+    <PageLayout title="Inventory Items" subtitle="Manage your inventory items" backHref="/dashboard" actions={headerActions}>
+      {/* Info banner */}
+      <Card className="bg-gradient-to-r from-blue-50 to-indigo-50 border-blue-200/50 mb-6">
+        <div className="flex items-center gap-3 text-sm text-blue-700">
+          <div className="w-8 h-8 bg-blue-100 rounded-lg flex items-center justify-center flex-shrink-0">
+            <svg className="w-4 h-4 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
           </div>
+          <p><strong>Tip:</strong> Double-click any cell to edit it directly. Press Enter to save or Escape to cancel.</p>
         </div>
-      </header>
+      </Card>
 
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
-        {/* Info banner */}
-        <div className="bg-blue-50 border border-blue-200 rounded-lg px-4 py-3 mb-6 text-sm text-blue-700">
-          <strong>Tip:</strong> Double-click any cell to edit it directly. Press Enter to save or Escape to cancel.
-        </div>
-
-        {/* Filters */}
-        <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-4 mb-6">
-          <div className="flex flex-wrap gap-4 items-end">
-            {/* Search */}
-            <div className="flex-1 min-w-[200px]">
-              <label className="block text-xs font-medium text-gray-500 mb-1">Search</label>
+      {/* Filters */}
+      <Card className="mb-6">
+        <div className="flex flex-wrap gap-4 items-end">
+          {/* Search */}
+          <div className="flex-1 min-w-[200px]">
+            <label className="block text-xs font-medium text-gray-500 mb-1.5">Search</label>
+            <div className="relative">
+              <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+              </svg>
               <input
                 type="text"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 placeholder="Search by name, description, SKU..."
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                className="w-full pl-10 pr-4 py-2.5 bg-white/80 border border-gray-200/50 rounded-xl text-sm focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition"
               />
             </div>
-
-            {/* Category filter */}
-            <div className="w-40">
-              <label className="block text-xs font-medium text-gray-500 mb-1">Category</label>
-              <select
-                value={filterCategory}
-                onChange={(e) => setFilterCategory(e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              >
-                <option value="">All Categories</option>
-                <option value="none">Uncategorized</option>
-                {categories.map((cat) => (
-                  <option key={cat.id} value={cat.id}>
-                    {cat.name}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            {/* Supplier filter */}
-            <div className="w-40">
-              <label className="block text-xs font-medium text-gray-500 mb-1">Supplier</label>
-              <select
-                value={filterSupplier}
-                onChange={(e) => setFilterSupplier(e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              >
-                <option value="">All Suppliers</option>
-                <option value="none">No Supplier</option>
-                {suppliers.map((sup) => (
-                  <option key={sup.id} value={sup.id}>
-                    {sup.name}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            {/* Unit filter */}
-            <div className="w-32">
-              <label className="block text-xs font-medium text-gray-500 mb-1">Unit</label>
-              <select
-                value={filterUnit}
-                onChange={(e) => setFilterUnit(e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              >
-                <option value="">All Units</option>
-                {uniqueUnits.map((unit) => (
-                  <option key={unit} value={unit}>
-                    {unit}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            {/* Clear filters */}
-            {hasFilters && (
-              <button
-                onClick={clearFilters}
-                className="px-3 py-2 text-sm text-gray-600 hover:text-gray-900"
-              >
-                Clear filters
-              </button>
-            )}
           </div>
 
-          {/* Results count */}
-          <div className="mt-3 text-sm text-gray-500">
-            Showing {filteredItems.length} of {items.length} items
+          {/* Category filter */}
+          <div className="w-44">
+            <label className="block text-xs font-medium text-gray-500 mb-1.5">Category</label>
+            <select
+              value={filterCategory}
+              onChange={(e) => setFilterCategory(e.target.value)}
+              className="w-full px-4 py-2.5 bg-white/80 border border-gray-200/50 rounded-xl text-sm focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition"
+            >
+              <option value="">All Categories</option>
+              <option value="none">Uncategorized</option>
+              {categories.map((cat) => (
+                <option key={cat.id} value={cat.id}>
+                  {cat.name}
+                </option>
+              ))}
+            </select>
           </div>
+
+          {/* Supplier filter */}
+          <div className="w-44">
+            <label className="block text-xs font-medium text-gray-500 mb-1.5">Supplier</label>
+            <select
+              value={filterSupplier}
+              onChange={(e) => setFilterSupplier(e.target.value)}
+              className="w-full px-4 py-2.5 bg-white/80 border border-gray-200/50 rounded-xl text-sm focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition"
+            >
+              <option value="">All Suppliers</option>
+              <option value="none">No Supplier</option>
+              {suppliers.map((sup) => (
+                <option key={sup.id} value={sup.id}>
+                  {sup.name}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          {/* Unit filter */}
+          <div className="w-36">
+            <label className="block text-xs font-medium text-gray-500 mb-1.5">Unit</label>
+            <select
+              value={filterUnit}
+              onChange={(e) => setFilterUnit(e.target.value)}
+              className="w-full px-4 py-2.5 bg-white/80 border border-gray-200/50 rounded-xl text-sm focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition"
+            >
+              <option value="">All Units</option>
+              {uniqueUnits.map((unit) => (
+                <option key={unit} value={unit}>
+                  {unit}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          {/* Clear filters */}
+          {hasFilters && (
+            <button
+              onClick={clearFilters}
+              className="px-4 py-2.5 text-sm text-gray-600 hover:text-gray-900 hover:bg-gray-100/80 rounded-xl transition"
+            >
+              Clear filters
+            </button>
+          )}
         </div>
 
-        {/* Items Table */}
-        <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
-          {loading ? (
-            <div className="p-12 text-center">
-              <div className="inline-block h-8 w-8 animate-spin rounded-full border-4 border-solid border-blue-600 border-r-transparent"></div>
-              <p className="mt-4 text-gray-500">Loading items...</p>
-            </div>
-          ) : filteredItems.length === 0 ? (
-            <div className="p-12 text-center">
-              <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
+        {/* Results count */}
+        <div className="mt-4 pt-4 border-t border-gray-100/50 text-sm text-gray-500">
+          Showing <span className="font-medium text-gray-700">{filteredItems.length}</span> of <span className="font-medium text-gray-700">{items.length}</span> items
+        </div>
+      </Card>
+
+      {/* Items Table */}
+      <Card padding={false}>
+        {loading ? (
+          <div className="p-16 text-center">
+            <div className="w-12 h-12 border-4 border-blue-600/20 border-t-blue-600 rounded-full animate-spin mx-auto"></div>
+            <p className="mt-4 text-gray-500">Loading items...</p>
+          </div>
+        ) : filteredItems.length === 0 ? (
+          <div className="p-12">
+            <EmptyState
+              icon={
                 <svg className="w-8 h-8 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
                 </svg>
-              </div>
-              <h3 className="text-lg font-medium text-gray-900 mb-2">
-                {hasFilters ? 'No items match your filters' : 'No items yet'}
-              </h3>
-              <p className="text-gray-500 mb-4">
-                {hasFilters ? 'Try adjusting your filters' : 'Create your first item to get started'}
-              </p>
-              {!hasFilters && (
-                <Link
-                  href="/items/new"
-                  className="inline-flex items-center px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium rounded-lg transition"
-                >
-                  Create First Item
-                </Link>
-              )}
-            </div>
-          ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full">
-                <thead className="bg-gray-50 border-b border-gray-100">
-                  <tr>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Item Name
-                    </th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Category
-                    </th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Supplier
-                    </th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Unit
-                    </th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Cost
-                    </th>
-                    <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Actions
-                    </th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-100">
-                  {filteredItems.map((item) => (
-                    <tr key={item.id} className="hover:bg-gray-50 transition">
-                      {/* Name */}
-                      <td className="px-4 py-3">
-                        {renderEditableCell(
-                          item,
-                          'name',
-                          <div>
-                            <div className="text-sm font-medium text-gray-900">{item.name}</div>
-                            {item.sku && (
-                              <div className="text-xs text-gray-400">SKU: {item.sku}</div>
-                            )}
-                          </div>
-                        )}
-                      </td>
-
-                      {/* Category */}
-                      <td className="px-4 py-3">
-                        {renderEditableCell(
-                          item,
-                          'category',
-                          <span
-                            className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${
-                              item.category
-                                ? 'bg-blue-100 text-blue-800'
-                                : 'bg-gray-100 text-gray-500'
-                            }`}
-                          >
-                            {item.category?.name || 'None'}
-                          </span>
-                        )}
-                      </td>
-
-                      {/* Supplier */}
-                      <td className="px-4 py-3">
-                        {renderEditableCell(
-                          item,
-                          'supplier',
-                          <span
-                            className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${
-                              item.supplier
-                                ? 'bg-purple-100 text-purple-800'
-                                : 'bg-gray-100 text-gray-500'
-                            }`}
-                          >
-                            {item.supplier?.name || 'None'}
-                          </span>
-                        )}
-                      </td>
-
-                      {/* Unit */}
-                      <td className="px-4 py-3">
-                        {renderEditableCell(
-                          item,
-                          'unit',
-                          <span className="text-sm text-gray-600">{item.unit}</span>
-                        )}
-                      </td>
-
-                      {/* Cost */}
-                      <td className="px-4 py-3">
-                        {renderEditableCell(
-                          item,
-                          'cost',
-                          <span className="text-sm text-gray-600">
-                            {item.costPrice ? `€${item.costPrice.toFixed(2)}` : '-'}
-                          </span>
-                        )}
-                      </td>
-
-                      {/* Actions */}
-                      <td className="px-4 py-3 text-right">
-                        <div className="flex justify-end gap-2">
-                          <Link
-                            href={`/items/${item.id}/edit`}
-                            className="px-3 py-1 bg-gray-100 hover:bg-gray-200 text-gray-700 text-sm font-medium rounded transition"
-                          >
-                            Full Edit
-                          </Link>
-                          <button
-                            onClick={() => setDeleteConfirm(item.id)}
-                            className="px-3 py-1 bg-red-100 hover:bg-red-200 text-red-700 text-sm font-medium rounded transition"
-                          >
-                            Delete
-                          </button>
+              }
+              title={hasFilters ? 'No items match your filters' : 'No items yet'}
+              description={hasFilters ? 'Try adjusting your filters to find what you\'re looking for' : 'Create your first item to get started tracking inventory'}
+              action={
+                !hasFilters && (
+                  <LinkButton href="/items/new" variant="primary">
+                    Create First Item
+                  </LinkButton>
+                )
+              }
+            />
+          </div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full">
+              <thead className="bg-gray-50/80 border-b border-gray-100/50">
+                <tr>
+                  <th className="px-6 py-4 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">
+                    Item Name
+                  </th>
+                  <th className="px-6 py-4 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">
+                    Category
+                  </th>
+                  <th className="px-6 py-4 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">
+                    Supplier
+                  </th>
+                  <th className="px-6 py-4 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">
+                    Unit
+                  </th>
+                  <th className="px-6 py-4 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">
+                    Cost
+                  </th>
+                  <th className="px-6 py-4 text-right text-xs font-semibold text-gray-500 uppercase tracking-wider">
+                    Actions
+                  </th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-100/50">
+                {filteredItems.map((item) => (
+                  <tr key={item.id} className="hover:bg-gray-50/50 transition">
+                    {/* Name */}
+                    <td className="px-6 py-4">
+                      {renderEditableCell(
+                        item,
+                        'name',
+                        <div>
+                          <div className="text-sm font-medium text-gray-900">{item.name}</div>
+                          {item.sku && (
+                            <div className="text-xs text-gray-400 mt-0.5">SKU: {item.sku}</div>
+                          )}
                         </div>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </div>
-      </main>
+                      )}
+                    </td>
+
+                    {/* Category */}
+                    <td className="px-6 py-4">
+                      {renderEditableCell(
+                        item,
+                        'category',
+                        <Badge variant={item.category ? 'info' : 'default'}>
+                          {item.category?.name || 'None'}
+                        </Badge>
+                      )}
+                    </td>
+
+                    {/* Supplier */}
+                    <td className="px-6 py-4">
+                      {renderEditableCell(
+                        item,
+                        'supplier',
+                        <Badge variant={item.supplier ? 'default' : 'default'}>
+                          {item.supplier?.name || 'None'}
+                        </Badge>
+                      )}
+                    </td>
+
+                    {/* Unit */}
+                    <td className="px-6 py-4">
+                      {renderEditableCell(
+                        item,
+                        'unit',
+                        <span className="text-sm text-gray-600">{item.unit}</span>
+                      )}
+                    </td>
+
+                    {/* Cost */}
+                    <td className="px-6 py-4">
+                      {renderEditableCell(
+                        item,
+                        'cost',
+                        <span className="text-sm font-medium text-gray-700">
+                          {item.costPrice ? `€${item.costPrice.toFixed(2)}` : '-'}
+                        </span>
+                      )}
+                    </td>
+
+                    {/* Actions */}
+                    <td className="px-6 py-4 text-right">
+                      <div className="flex justify-end gap-2">
+                        <Link
+                          href={`/items/${item.id}/edit`}
+                          className="px-3 py-1.5 bg-gray-100/80 hover:bg-gray-200/80 text-gray-700 text-sm font-medium rounded-lg transition"
+                        >
+                          Edit
+                        </Link>
+                        <button
+                          onClick={() => setDeleteConfirm(item.id)}
+                          className="px-3 py-1.5 bg-red-50 hover:bg-red-100 text-red-600 text-sm font-medium rounded-lg transition"
+                        >
+                          Delete
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </Card>
 
       {/* Delete Confirmation Modal */}
       {deleteConfirm && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg p-6 max-w-md mx-4">
-            <h3 className="text-lg font-semibold text-gray-900 mb-2">Delete Item?</h3>
-            <p className="text-gray-600 mb-6">
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50">
+          <div className="bg-white rounded-2xl p-6 max-w-md mx-4 shadow-2xl">
+            <div className="w-12 h-12 bg-red-100 rounded-xl flex items-center justify-center mx-auto mb-4">
+              <svg className="w-6 h-6 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+              </svg>
+            </div>
+            <h3 className="text-lg font-semibold text-gray-900 text-center mb-2">Delete Item?</h3>
+            <p className="text-gray-600 text-center mb-6">
               This will also delete all associated stock entries. This action cannot be undone.
             </p>
             <div className="flex gap-3">
               <button
                 onClick={() => setDeleteConfirm(null)}
-                className="flex-1 px-4 py-2 bg-gray-200 hover:bg-gray-300 text-gray-700 font-medium rounded-lg transition"
+                className="flex-1 px-4 py-2.5 bg-gray-100 hover:bg-gray-200 text-gray-700 font-medium rounded-xl transition"
               >
                 Cancel
               </button>
               <button
                 onClick={() => handleDelete(deleteConfirm)}
-                className="flex-1 px-4 py-2 bg-red-600 hover:bg-red-700 text-white font-medium rounded-lg transition"
+                className="flex-1 px-4 py-2.5 bg-gradient-to-r from-red-500 to-red-600 hover:from-red-600 hover:to-red-700 text-white font-medium rounded-xl transition shadow-lg shadow-red-500/25"
               >
                 Delete
               </button>
@@ -723,6 +696,6 @@ export default function ItemsPage() {
           </div>
         </div>
       )}
-    </div>
+    </PageLayout>
   );
 }
