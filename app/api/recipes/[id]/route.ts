@@ -63,12 +63,19 @@ export async function GET(
         },
         squareItemMappings: {
           include: {
-            catalogItem: true,
+            catalogItem: {
+              include: {
+                variations: true,
+              },
+            },
             variation: true,
           },
         },
         steps: {
           orderBy: { stepNumber: 'asc' },
+        },
+        tags: {
+          include: { tag: true },
         },
       },
     });
@@ -90,11 +97,32 @@ export async function GET(
       }
     }
 
+    // Get Square price from mappings
+    let salePrice: number | null = null;
+    if (recipe.squareItemMappings && recipe.squareItemMappings.length > 0) {
+      const mapping = recipe.squareItemMappings[0];
+      if (mapping.variation?.priceMoney) {
+        salePrice = mapping.variation.priceMoney / 100;
+      } else if (mapping.catalogItem?.variations?.[0]?.priceMoney) {
+        salePrice = mapping.catalogItem.variations[0].priceMoney / 100;
+      }
+    }
+
+    const costPerPortion = calculatedCost / recipe.yieldQuantity;
+    const profit = salePrice !== null ? salePrice - costPerPortion : null;
+    const margin = salePrice !== null && salePrice > 0
+      ? ((profit || 0) / salePrice) * 100
+      : null;
+
     return NextResponse.json({
       ...recipe,
+      tags: recipe.tags.map(t => t.tag),
       equipment,
       calculatedCost,
-      costPerPortion: calculatedCost / recipe.yieldQuantity,
+      costPerPortion,
+      salePrice,
+      profit,
+      margin,
     });
   } catch (error) {
     console.error('Error fetching recipe:', error);
@@ -144,6 +172,7 @@ export async function PUT(
       steps,
       equipment,
       squareItemId,
+      tagIds, // Array of tag IDs to assign
     } = body;
 
     // Update recipe and replace ingredients/steps in a transaction
@@ -158,6 +187,13 @@ export async function PUT(
       // Delete existing steps if new ones provided
       if (steps !== undefined) {
         await tx.recipeStep.deleteMany({
+          where: { recipeId: id },
+        });
+      }
+
+      // Delete existing tag assignments if new ones provided
+      if (tagIds !== undefined) {
+        await tx.recipeTagAssignment.deleteMany({
           where: { recipeId: id },
         });
       }
@@ -203,6 +239,13 @@ export async function PUT(
               })),
             },
           }),
+          ...(tagIds !== undefined && {
+            tags: {
+              create: tagIds.map((tagId: string) => ({
+                tagId,
+              })),
+            },
+          }),
         },
         include: {
           category: true,
@@ -215,11 +258,17 @@ export async function PUT(
           steps: {
             orderBy: { stepNumber: 'asc' },
           },
+          tags: {
+            include: { tag: true },
+          },
         },
       });
     });
 
-    return NextResponse.json(recipe);
+    return NextResponse.json({
+      ...recipe,
+      tags: recipe.tags.map(t => t.tag),
+    });
   } catch (error) {
     console.error('Error updating recipe:', error);
     return NextResponse.json(

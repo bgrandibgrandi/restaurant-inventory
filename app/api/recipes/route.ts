@@ -3,7 +3,7 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/db';
 
-// Get all recipes with ingredients and cost calculation
+// Get all recipes with ingredients, cost calculation, tags, and Square prices
 export async function GET(request: NextRequest) {
   try {
     const session = await getServerSession(authOptions);
@@ -15,6 +15,7 @@ export async function GET(request: NextRequest) {
     const includeSubRecipes = searchParams.get('includeSubRecipes') !== 'false';
     const activeOnly = searchParams.get('activeOnly') === 'true';
     const categoryId = searchParams.get('categoryId');
+    const tagId = searchParams.get('tagId');
 
     const recipes = await prisma.recipe.findMany({
       where: {
@@ -22,9 +23,19 @@ export async function GET(request: NextRequest) {
         ...(activeOnly && { isActive: true }),
         ...(categoryId && { categoryId }),
         ...(!includeSubRecipes && { isSubRecipe: false }),
+        ...(tagId && {
+          tags: {
+            some: { tagId },
+          },
+        }),
       },
       include: {
         category: true,
+        tags: {
+          include: {
+            tag: true,
+          },
+        },
         ingredients: {
           include: {
             item: {
@@ -55,6 +66,16 @@ export async function GET(request: NextRequest) {
             },
           },
         },
+        squareItemMappings: {
+          include: {
+            catalogItem: {
+              include: {
+                variations: true,
+              },
+            },
+            variation: true,
+          },
+        },
         _count: {
           select: { squareItemMappings: true },
         },
@@ -62,13 +83,40 @@ export async function GET(request: NextRequest) {
       orderBy: { name: 'asc' },
     });
 
-    // Calculate cost for each recipe
-    const recipesWithCost = recipes.map((recipe) => ({
-      ...recipe,
-      calculatedCost: calculateRecipeCost(recipe),
-      costPerPortion: calculateRecipeCost(recipe) / recipe.yieldQuantity,
-      squareMappingsCount: recipe._count.squareItemMappings,
-    }));
+    // Calculate cost and extract Square price for each recipe
+    const recipesWithCost = recipes.map((recipe) => {
+      const cost = calculateRecipeCost(recipe);
+      const costPerPortion = cost / recipe.yieldQuantity;
+
+      // Get Square price from mappings
+      let salePrice: number | null = null;
+      if (recipe.squareItemMappings && recipe.squareItemMappings.length > 0) {
+        const mapping = recipe.squareItemMappings[0];
+        // Try variation price first, then catalog item's first variation
+        if (mapping.variation?.priceMoney) {
+          salePrice = mapping.variation.priceMoney / 100; // Convert from cents
+        } else if (mapping.catalogItem?.variations?.[0]?.priceMoney) {
+          salePrice = mapping.catalogItem.variations[0].priceMoney / 100;
+        }
+      }
+
+      // Calculate profit and margin
+      const profit = salePrice !== null ? salePrice - costPerPortion : null;
+      const margin = salePrice !== null && salePrice > 0
+        ? ((profit || 0) / salePrice) * 100
+        : null;
+
+      return {
+        ...recipe,
+        tags: recipe.tags.map(t => t.tag),
+        calculatedCost: cost,
+        costPerPortion,
+        salePrice,
+        profit,
+        margin,
+        squareMappingsCount: recipe._count.squareItemMappings,
+      };
+    });
 
     return NextResponse.json(recipesWithCost);
   } catch (error) {
@@ -104,6 +152,7 @@ export async function POST(request: NextRequest) {
       steps,
       equipment,
       squareItemId,
+      tagIds, // Array of tag IDs to assign
     } = body;
 
     if (!name) {
@@ -149,6 +198,11 @@ export async function POST(request: NextRequest) {
             notes: step.notes || null,
           })),
         },
+        tags: {
+          create: (tagIds || []).map((tagId: string) => ({
+            tagId,
+          })),
+        },
       },
       include: {
         category: true,
@@ -161,10 +215,16 @@ export async function POST(request: NextRequest) {
         steps: {
           orderBy: { stepNumber: 'asc' },
         },
+        tags: {
+          include: { tag: true },
+        },
       },
     });
 
-    return NextResponse.json(recipe, { status: 201 });
+    return NextResponse.json({
+      ...recipe,
+      tags: recipe.tags.map(t => t.tag),
+    }, { status: 201 });
   } catch (error) {
     console.error('Error creating recipe:', error);
     return NextResponse.json(

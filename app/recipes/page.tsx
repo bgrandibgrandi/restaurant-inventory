@@ -1,8 +1,13 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import Link from 'next/link';
-import PageLayout, { Card, LinkButton, Badge, EmptyState, StatCard } from '@/components/ui/PageLayout';
+
+interface RecipeTag {
+  id: string;
+  name: string;
+  color: string;
+}
 
 interface Recipe {
   id: string;
@@ -14,46 +19,84 @@ interface Recipe {
   isSubRecipe: boolean;
   isActive: boolean;
   category: { id: string; name: string } | null;
+  tags: RecipeTag[];
   ingredients: any[];
   calculatedCost: number;
   costPerPortion: number;
+  salePrice: number | null;
+  profit: number | null;
+  margin: number | null;
   squareMappingsCount: number;
 }
 
 export default function RecipesPage() {
   const [recipes, setRecipes] = useState<Recipe[]>([]);
+  const [tags, setTags] = useState<RecipeTag[]>([]);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState<'all' | 'recipes' | 'subrecipes'>('all');
   const [searchQuery, setSearchQuery] = useState('');
+  const [selectedTagIds, setSelectedTagIds] = useState<string[]>([]);
+  const [showTagManager, setShowTagManager] = useState(false);
+  const [newTagName, setNewTagName] = useState('');
+  const [creatingTag, setCreatingTag] = useState(false);
 
   useEffect(() => {
-    fetchRecipes();
+    fetchData();
   }, []);
 
-  const fetchRecipes = async () => {
+  const fetchData = async () => {
     try {
-      const response = await fetch('/api/recipes');
-      if (response.ok) {
-        const data = await response.json();
-        setRecipes(data);
+      const [recipesRes, tagsRes] = await Promise.all([
+        fetch('/api/recipes'),
+        fetch('/api/recipe-tags'),
+      ]);
+
+      if (recipesRes.ok) {
+        setRecipes(await recipesRes.json());
+      }
+      if (tagsRes.ok) {
+        setTags(await tagsRes.json());
       }
     } catch (error) {
-      console.error('Error fetching recipes:', error);
+      console.error('Error fetching data:', error);
     } finally {
       setLoading(false);
     }
   };
 
-  const filteredRecipes = recipes.filter((recipe) => {
-    const matchesSearch =
-      recipe.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      recipe.description?.toLowerCase().includes(searchQuery.toLowerCase());
-    const matchesFilter =
-      filter === 'all' ||
-      (filter === 'recipes' && !recipe.isSubRecipe) ||
-      (filter === 'subrecipes' && recipe.isSubRecipe);
-    return matchesSearch && matchesFilter;
-  });
+  const filteredRecipes = useMemo(() => {
+    return recipes.filter((recipe) => {
+      const matchesSearch =
+        recipe.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        recipe.description?.toLowerCase().includes(searchQuery.toLowerCase());
+      const matchesFilter =
+        filter === 'all' ||
+        (filter === 'recipes' && !recipe.isSubRecipe) ||
+        (filter === 'subrecipes' && recipe.isSubRecipe);
+      const matchesTags =
+        selectedTagIds.length === 0 ||
+        selectedTagIds.some((tagId) => recipe.tags?.some((t) => t.id === tagId));
+      return matchesSearch && matchesFilter && matchesTags;
+    });
+  }, [recipes, searchQuery, filter, selectedTagIds]);
+
+  const stats = useMemo(() => {
+    const menuItems = recipes.filter((r) => !r.isSubRecipe);
+    const withPricing = menuItems.filter((r) => r.salePrice !== null);
+    const avgMargin = withPricing.length > 0
+      ? withPricing.reduce((sum, r) => sum + (r.margin || 0), 0) / withPricing.length
+      : 0;
+    const lowMarginCount = withPricing.filter((r) => (r.margin || 0) < 50).length;
+
+    return {
+      total: recipes.length,
+      menuItems: menuItems.length,
+      subRecipes: recipes.filter((r) => r.isSubRecipe).length,
+      linkedToSquare: recipes.filter((r) => r.squareMappingsCount > 0).length,
+      avgMargin,
+      lowMarginCount,
+    };
+  }, [recipes]);
 
   const formatCurrency = (amount: number) => {
     return new Intl.NumberFormat('de-DE', {
@@ -62,235 +105,438 @@ export default function RecipesPage() {
     }).format(amount);
   };
 
-  const headerActions = (
-    <div className="flex items-center gap-2">
-      <LinkButton href="/recipes/mappings" variant="ghost" size="sm">
-        <svg className="w-4 h-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
-        </svg>
-        Mappings
-      </LinkButton>
-      <LinkButton href="/recipes/import" variant="secondary" size="sm">
-        <svg className="w-4 h-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
-        </svg>
-        Import
-      </LinkButton>
-      <LinkButton href="/recipes/new" variant="primary" size="sm">
-        <svg className="w-4 h-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-        </svg>
-        New Recipe
-      </LinkButton>
-    </div>
-  );
+  const toggleTag = (tagId: string) => {
+    setSelectedTagIds((prev) =>
+      prev.includes(tagId) ? prev.filter((id) => id !== tagId) : [...prev, tagId]
+    );
+  };
+
+  const handleCreateTag = async () => {
+    if (!newTagName.trim()) return;
+
+    setCreatingTag(true);
+    try {
+      const response = await fetch('/api/recipe-tags', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: newTagName.trim() }),
+      });
+
+      if (response.ok) {
+        const tag = await response.json();
+        setTags([...tags, tag]);
+        setNewTagName('');
+      }
+    } catch (error) {
+      console.error('Error creating tag:', error);
+    } finally {
+      setCreatingTag(false);
+    }
+  };
+
+  const handleDeleteTag = async (tagId: string) => {
+    if (!confirm('Delete this tag? It will be removed from all recipes.')) return;
+
+    try {
+      const response = await fetch(`/api/recipe-tags/${tagId}`, {
+        method: 'DELETE',
+      });
+
+      if (response.ok) {
+        setTags(tags.filter((t) => t.id !== tagId));
+        setSelectedTagIds((prev) => prev.filter((id) => id !== tagId));
+        // Refresh recipes to update tag assignments
+        const recipesRes = await fetch('/api/recipes');
+        if (recipesRes.ok) {
+          setRecipes(await recipesRes.json());
+        }
+      }
+    } catch (error) {
+      console.error('Error deleting tag:', error);
+    }
+  };
+
+  const getMarginColor = (margin: number | null) => {
+    if (margin === null) return 'text-gray-400';
+    if (margin >= 70) return 'text-green-600';
+    if (margin >= 50) return 'text-blue-600';
+    if (margin >= 30) return 'text-amber-600';
+    return 'text-red-600';
+  };
+
+  const getMarginBg = (margin: number | null) => {
+    if (margin === null) return 'bg-gray-50';
+    if (margin >= 70) return 'bg-green-50';
+    if (margin >= 50) return 'bg-blue-50';
+    if (margin >= 30) return 'bg-amber-50';
+    return 'bg-red-50';
+  };
 
   if (loading) {
     return (
-      <PageLayout title="Recipes" subtitle="Your culinary collection" backHref="/dashboard" actions={headerActions}>
-        <div className="flex items-center justify-center py-20">
-          <div className="text-center">
-            <div className="w-12 h-12 border-4 border-blue-600/20 border-t-blue-600 rounded-full animate-spin mx-auto"></div>
-            <p className="mt-4 text-gray-600">Loading recipes...</p>
-          </div>
+      <div className="min-h-screen bg-gradient-to-br from-slate-50 to-blue-50 flex items-center justify-center">
+        <div className="text-center">
+          <div className="w-12 h-12 border-4 border-blue-600/20 border-t-blue-600 rounded-full animate-spin mx-auto"></div>
+          <p className="mt-4 text-gray-600">Loading recipes...</p>
         </div>
-      </PageLayout>
+      </div>
     );
   }
 
   return (
-    <PageLayout title="Recipes" subtitle="Your culinary collection" backHref="/dashboard" actions={headerActions}>
-      {/* Stats Cards */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
-        <StatCard
-          title="Total Recipes"
-          value={recipes.length}
-          icon={
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
-            </svg>
-          }
-          iconBg="bg-gradient-to-br from-purple-100 to-indigo-100"
-          iconColor="text-purple-600"
-        />
-        <StatCard
-          title="Menu Items"
-          value={recipes.filter((r) => !r.isSubRecipe).length}
-          icon={
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
-            </svg>
-          }
-          iconBg="bg-gradient-to-br from-blue-100 to-cyan-100"
-          iconColor="text-blue-600"
-        />
-        <StatCard
-          title="Sub-recipes"
-          value={recipes.filter((r) => r.isSubRecipe).length}
-          icon={
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19.428 15.428a2 2 0 00-1.022-.547l-2.387-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z" />
-            </svg>
-          }
-          iconBg="bg-gradient-to-br from-orange-100 to-amber-100"
-          iconColor="text-orange-600"
-        />
-        <Link href="/recipes/mappings" className="block">
-          <Card className="h-full hover:border-green-300/50 group">
-            <div className="flex items-center justify-between mb-3">
-              <div className="text-sm font-medium text-gray-600">Linked to Square</div>
-              <div className="w-10 h-10 bg-gradient-to-br from-green-100 to-emerald-100 rounded-xl flex items-center justify-center text-green-600 group-hover:scale-110 transition-transform">
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-blue-50">
+      {/* Header */}
+      <header className="bg-white/80 backdrop-blur-md border-b border-gray-200/50 sticky top-0 z-20">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="flex justify-between items-center h-16">
+            <div className="flex items-center gap-4">
+              <Link href="/dashboard" className="text-gray-500 hover:text-gray-700 transition">
+                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
                 </svg>
+              </Link>
+              <div>
+                <h1 className="text-2xl font-bold bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent">
+                  Recipes
+                </h1>
+                <p className="text-sm text-gray-500">Menu costing & profitability</p>
               </div>
             </div>
-            <div className="text-3xl font-bold text-gray-900 mb-1">
-              {recipes.filter((r) => r.squareMappingsCount > 0).length}
-            </div>
-            <div className="text-sm text-green-600 font-medium">View mappings →</div>
-          </Card>
-        </Link>
-      </div>
-
-      {/* Filters */}
-      <Card className="mb-6">
-        <div className="flex flex-col md:flex-row gap-4 items-start md:items-center">
-          <div className="flex-1 w-full md:w-auto">
-            <div className="relative">
-              <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-              </svg>
-              <input
-                type="text"
-                placeholder="Search recipes..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full pl-10 pr-4 py-2.5 bg-white/80 border border-gray-200/50 rounded-xl text-sm focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition"
-              />
-            </div>
-          </div>
-          <div className="flex gap-2 p-1 bg-gray-100/80 rounded-xl">
-            {[
-              { key: 'all', label: 'All' },
-              { key: 'recipes', label: 'Menu Items' },
-              { key: 'subrecipes', label: 'Prep Items' },
-            ].map((item) => (
-              <button
-                key={item.key}
-                onClick={() => setFilter(item.key as 'all' | 'recipes' | 'subrecipes')}
-                className={`px-4 py-2 rounded-lg text-sm font-medium transition ${
-                  filter === item.key
-                    ? 'bg-white text-gray-900 shadow-sm'
-                    : 'text-gray-600 hover:text-gray-900'
-                }`}
+            <div className="flex items-center gap-3">
+              <Link
+                href="/recipes/mappings"
+                className="inline-flex items-center px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-200 rounded-xl hover:bg-gray-50 transition"
               >
-                {item.label}
-              </button>
-            ))}
+                <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
+                </svg>
+                Mappings
+              </Link>
+              <Link
+                href="/recipes/new"
+                className="inline-flex items-center px-5 py-2.5 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white text-sm font-semibold rounded-xl shadow-lg shadow-blue-500/25 transition"
+              >
+                <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                </svg>
+                New Recipe
+              </Link>
+            </div>
           </div>
         </div>
-      </Card>
+      </header>
 
-      {/* Recipes List */}
-      <Card padding={false}>
-        {filteredRecipes.length === 0 ? (
-          <div className="p-12">
-            <EmptyState
-              icon={
+      {/* Main Content */}
+      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        {/* Stats Cards */}
+        <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4 mb-6">
+          <div className="bg-white rounded-2xl shadow-lg shadow-gray-200/50 border border-gray-100 p-4">
+            <div className="text-sm font-medium text-gray-500 mb-1">Total Recipes</div>
+            <div className="text-2xl font-bold text-gray-900">{stats.total}</div>
+          </div>
+          <div className="bg-white rounded-2xl shadow-lg shadow-gray-200/50 border border-gray-100 p-4">
+            <div className="text-sm font-medium text-gray-500 mb-1">Menu Items</div>
+            <div className="text-2xl font-bold text-blue-600">{stats.menuItems}</div>
+          </div>
+          <div className="bg-white rounded-2xl shadow-lg shadow-gray-200/50 border border-gray-100 p-4">
+            <div className="text-sm font-medium text-gray-500 mb-1">Prep Items</div>
+            <div className="text-2xl font-bold text-orange-600">{stats.subRecipes}</div>
+          </div>
+          <div className="bg-white rounded-2xl shadow-lg shadow-gray-200/50 border border-gray-100 p-4">
+            <div className="text-sm font-medium text-gray-500 mb-1">Linked to POS</div>
+            <div className="text-2xl font-bold text-green-600">{stats.linkedToSquare}</div>
+          </div>
+          <div className="bg-white rounded-2xl shadow-lg shadow-gray-200/50 border border-gray-100 p-4">
+            <div className="text-sm font-medium text-gray-500 mb-1">Avg Margin</div>
+            <div className={`text-2xl font-bold ${getMarginColor(stats.avgMargin)}`}>
+              {stats.avgMargin > 0 ? `${stats.avgMargin.toFixed(0)}%` : '—'}
+            </div>
+          </div>
+          <div className="bg-white rounded-2xl shadow-lg shadow-gray-200/50 border border-gray-100 p-4">
+            <div className="text-sm font-medium text-gray-500 mb-1">Low Margin</div>
+            <div className="text-2xl font-bold text-red-600">{stats.lowMarginCount}</div>
+            <div className="text-xs text-gray-400">&lt;50%</div>
+          </div>
+        </div>
+
+        {/* Filters */}
+        <div className="bg-white rounded-2xl shadow-lg shadow-gray-200/50 border border-gray-100 p-4 mb-6">
+          <div className="flex flex-col lg:flex-row gap-4">
+            {/* Search */}
+            <div className="flex-1">
+              <div className="relative">
+                <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                </svg>
+                <input
+                  type="text"
+                  placeholder="Search recipes..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="w-full pl-10 pr-4 py-2.5 border-2 border-gray-200 rounded-xl focus:ring-4 focus:ring-blue-500/20 focus:border-blue-500 transition"
+                />
+              </div>
+            </div>
+
+            {/* Type Filter */}
+            <div className="flex gap-2 p-1 bg-gray-100 rounded-xl">
+              {[
+                { key: 'all', label: 'All' },
+                { key: 'recipes', label: 'Menu Items' },
+                { key: 'subrecipes', label: 'Prep Items' },
+              ].map((item) => (
+                <button
+                  key={item.key}
+                  onClick={() => setFilter(item.key as typeof filter)}
+                  className={`px-4 py-2 rounded-lg text-sm font-medium transition ${
+                    filter === item.key
+                      ? 'bg-white text-gray-900 shadow-sm'
+                      : 'text-gray-600 hover:text-gray-900'
+                  }`}
+                >
+                  {item.label}
+                </button>
+              ))}
+            </div>
+
+            {/* Tag Manager Button */}
+            <button
+              onClick={() => setShowTagManager(!showTagManager)}
+              className="inline-flex items-center px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-xl transition"
+            >
+              <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z" />
+              </svg>
+              Tags
+            </button>
+          </div>
+
+          {/* Tag Filter Pills */}
+          {tags.length > 0 && (
+            <div className="flex flex-wrap gap-2 mt-4 pt-4 border-t border-gray-100">
+              {tags.map((tag) => (
+                <button
+                  key={tag.id}
+                  onClick={() => toggleTag(tag.id)}
+                  className={`inline-flex items-center px-3 py-1.5 rounded-full text-sm font-medium transition ${
+                    selectedTagIds.includes(tag.id)
+                      ? 'ring-2 ring-offset-1'
+                      : 'opacity-70 hover:opacity-100'
+                  }`}
+                  style={{
+                    backgroundColor: `${tag.color}20`,
+                    color: tag.color,
+                    ...(selectedTagIds.includes(tag.id) && { ringColor: tag.color }),
+                  }}
+                >
+                  {tag.name}
+                  {selectedTagIds.includes(tag.id) && (
+                    <svg className="w-3 h-3 ml-1" fill="currentColor" viewBox="0 0 20 20">
+                      <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                    </svg>
+                  )}
+                </button>
+              ))}
+              {selectedTagIds.length > 0 && (
+                <button
+                  onClick={() => setSelectedTagIds([])}
+                  className="text-sm text-gray-500 hover:text-gray-700 font-medium"
+                >
+                  Clear filters
+                </button>
+              )}
+            </div>
+          )}
+        </div>
+
+        {/* Tag Manager Modal */}
+        {showTagManager && (
+          <div className="bg-white rounded-2xl shadow-lg shadow-gray-200/50 border border-gray-100 p-6 mb-6">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-bold text-gray-900">Manage Tags</h3>
+              <button onClick={() => setShowTagManager(false)} className="text-gray-400 hover:text-gray-600">
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+
+            {/* Create new tag */}
+            <div className="flex gap-2 mb-4">
+              <input
+                type="text"
+                value={newTagName}
+                onChange={(e) => setNewTagName(e.target.value)}
+                placeholder="New tag name..."
+                className="flex-1 px-4 py-2 border-2 border-gray-200 rounded-xl focus:ring-4 focus:ring-blue-500/20 focus:border-blue-500"
+                onKeyDown={(e) => e.key === 'Enter' && handleCreateTag()}
+              />
+              <button
+                onClick={handleCreateTag}
+                disabled={creatingTag || !newTagName.trim()}
+                className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-xl disabled:opacity-50 transition"
+              >
+                {creatingTag ? 'Adding...' : 'Add Tag'}
+              </button>
+            </div>
+
+            {/* Existing tags */}
+            <div className="flex flex-wrap gap-2">
+              {tags.map((tag) => (
+                <div
+                  key={tag.id}
+                  className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-sm font-medium"
+                  style={{ backgroundColor: `${tag.color}20`, color: tag.color }}
+                >
+                  {tag.name}
+                  <button
+                    onClick={() => handleDeleteTag(tag.id)}
+                    className="hover:opacity-70 transition"
+                  >
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                  </button>
+                </div>
+              ))}
+              {tags.length === 0 && (
+                <p className="text-sm text-gray-500">No tags yet. Create your first tag above.</p>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* Recipes List - Escandallos Style */}
+        <div className="bg-white rounded-2xl shadow-lg shadow-gray-200/50 border border-gray-100 overflow-hidden">
+          {filteredRecipes.length === 0 ? (
+            <div className="p-12 text-center">
+              <div className="w-16 h-16 rounded-full bg-gray-100 flex items-center justify-center mx-auto mb-4">
                 <svg className="w-8 h-8 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
                 </svg>
-              }
-              title="No recipes found"
-              description={
-                searchQuery || filter !== 'all'
+              </div>
+              <h3 className="text-lg font-semibold text-gray-900 mb-2">No recipes found</h3>
+              <p className="text-gray-500 mb-4">
+                {searchQuery || selectedTagIds.length > 0 || filter !== 'all'
                   ? 'Try adjusting your search or filters'
-                  : 'Get started by creating your first recipe'
-              }
-              action={
-                !searchQuery && filter === 'all' && (
-                  <LinkButton href="/recipes/new" variant="primary">
-                    Create Recipe
-                  </LinkButton>
-                )
-              }
-            />
-          </div>
-        ) : (
-          <div className="divide-y divide-gray-100/50">
-            {filteredRecipes.map((recipe) => (
-              <Link
-                key={recipe.id}
-                href={`/recipes/${recipe.id}`}
-                className="block p-5 hover:bg-gray-50/50 transition group"
-              >
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-4 flex-1 min-w-0">
+                  : 'Get started by creating your first recipe'}
+              </p>
+              {!searchQuery && selectedTagIds.length === 0 && filter === 'all' && (
+                <Link
+                  href="/recipes/new"
+                  className="inline-flex items-center px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-xl transition"
+                >
+                  Create Recipe
+                </Link>
+              )}
+            </div>
+          ) : (
+            <div className="divide-y divide-gray-100">
+              {filteredRecipes.map((recipe) => (
+                <Link
+                  key={recipe.id}
+                  href={`/recipes/${recipe.id}`}
+                  className="flex items-center p-4 hover:bg-gray-50/50 transition group"
+                >
+                  {/* Image */}
+                  <div className="flex-shrink-0 mr-4">
                     {recipe.imageUrl ? (
                       <img
                         src={recipe.imageUrl}
                         alt={recipe.name}
-                        className="w-12 h-12 object-cover rounded-xl flex-shrink-0 ring-2 ring-gray-100"
+                        className="w-16 h-16 object-cover rounded-xl ring-2 ring-gray-100"
                       />
                     ) : (
-                      <div className="w-12 h-12 bg-gradient-to-br from-gray-100 to-gray-200 rounded-xl flex-shrink-0 flex items-center justify-center">
-                        <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <div className="w-16 h-16 bg-gradient-to-br from-gray-100 to-gray-200 rounded-xl flex items-center justify-center">
+                        <svg className="w-6 h-6 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
                         </svg>
                       </div>
                     )}
-                    <div className="min-w-0">
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <h3 className="text-base font-semibold text-gray-900 truncate group-hover:text-blue-600 transition">
-                          {recipe.name}
-                        </h3>
-                        {recipe.isSubRecipe && (
-                          <Badge variant="warning">Prep Item</Badge>
-                        )}
-                        {recipe.squareMappingsCount > 0 && (
-                          <Badge variant="success">Square</Badge>
-                        )}
-                        {!recipe.isActive && (
-                          <Badge variant="default">Inactive</Badge>
+                  </div>
+
+                  {/* Name & Tags */}
+                  <div className="flex-1 min-w-0 mr-4">
+                    <h3 className="text-base font-semibold text-gray-900 truncate group-hover:text-blue-600 transition">
+                      {recipe.name}
+                    </h3>
+                    <div className="flex flex-wrap gap-1.5 mt-1.5">
+                      {recipe.isSubRecipe && (
+                        <span className="px-2 py-0.5 text-xs font-medium bg-orange-100 text-orange-700 rounded-full">
+                          Prep Item
+                        </span>
+                      )}
+                      {recipe.tags?.map((tag) => (
+                        <span
+                          key={tag.id}
+                          className="px-2 py-0.5 text-xs font-medium rounded-full"
+                          style={{ backgroundColor: `${tag.color}20`, color: tag.color }}
+                        >
+                          {tag.name}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Metrics Grid */}
+                  <div className="hidden md:grid md:grid-cols-4 gap-6 text-center">
+                    {/* Cost */}
+                    <div>
+                      <div className="text-xs text-gray-500 mb-0.5">Cost</div>
+                      <div className="text-sm font-bold text-gray-900">
+                        {formatCurrency(recipe.costPerPortion)}
+                      </div>
+                    </div>
+
+                    {/* Sale Price */}
+                    <div>
+                      <div className="text-xs text-gray-500 mb-0.5">Price</div>
+                      <div className="text-sm font-bold text-gray-900">
+                        {recipe.salePrice !== null ? formatCurrency(recipe.salePrice) : (
+                          <span className="text-gray-400">—</span>
                         )}
                       </div>
-                      <div className="flex items-center gap-3 mt-1.5 text-sm text-gray-500">
-                        {recipe.category && (
-                          <span className="flex items-center gap-1">
-                            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z" />
-                            </svg>
-                            {recipe.category.name}
-                          </span>
-                        )}
-                        <span className="flex items-center gap-1">
-                          <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
-                          </svg>
-                          {recipe.ingredients.length} ingredients
-                        </span>
-                        <span className="flex items-center gap-1">
-                          <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 6l3 1m0 0l-3 9a5.002 5.002 0 006.001 0M6 7l3 9M6 7l6-2m6 2l3-1m-3 1l-3 9a5.002 5.002 0 006.001 0M18 7l3 9m-3-9l-6-2m0-2v2m0 16V5m0 16H9m3 0h3" />
-                          </svg>
-                          {recipe.yieldQuantity} {recipe.yieldUnit}
-                        </span>
+                    </div>
+
+                    {/* Profit */}
+                    <div>
+                      <div className="text-xs text-gray-500 mb-0.5">Profit</div>
+                      <div className={`text-sm font-bold ${recipe.profit !== null ? 'text-green-600' : 'text-gray-400'}`}>
+                        {recipe.profit !== null ? formatCurrency(recipe.profit) : '—'}
+                      </div>
+                    </div>
+
+                    {/* Margin */}
+                    <div className={`px-3 py-1.5 rounded-xl ${getMarginBg(recipe.margin)}`}>
+                      <div className="text-xs text-gray-500 mb-0.5">Margin</div>
+                      <div className={`text-lg font-bold ${getMarginColor(recipe.margin)}`}>
+                        {recipe.margin !== null ? `${recipe.margin.toFixed(0)}%` : '—'}
                       </div>
                     </div>
                   </div>
-                  <div className="text-right ml-6 flex-shrink-0">
-                    <div className="text-xl font-bold bg-gradient-to-r from-gray-900 to-gray-700 bg-clip-text text-transparent">
-                      {formatCurrency(recipe.costPerPortion)}
+
+                  {/* Mobile Metrics */}
+                  <div className="md:hidden flex-shrink-0">
+                    <div className={`px-3 py-2 rounded-xl ${getMarginBg(recipe.margin)}`}>
+                      <div className="text-xs text-gray-500">Margin</div>
+                      <div className={`text-lg font-bold ${getMarginColor(recipe.margin)}`}>
+                        {recipe.margin !== null ? `${recipe.margin.toFixed(0)}%` : '—'}
+                      </div>
                     </div>
-                    <div className="text-xs text-gray-500">per {recipe.yieldUnit.replace(/s$/, '')}</div>
                   </div>
-                </div>
-              </Link>
-            ))}
-          </div>
-        )}
-      </Card>
-    </PageLayout>
+
+                  {/* Arrow */}
+                  <div className="flex-shrink-0 ml-4 opacity-0 group-hover:opacity-100 transition">
+                    <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                    </svg>
+                  </div>
+                </Link>
+              ))}
+            </div>
+          )}
+        </div>
+      </main>
+    </div>
   );
 }

@@ -29,6 +29,8 @@ model Account {
   notifications   Notification[]
   // Recipe & Square integration
   recipes                Recipe[]
+  recipeTags             RecipeTag[]
+  prepPlans              PrepPlan[]
   squareConnections      SquareConnection[]
   squareCatalogItems     SquareCatalogItem[]
   squareItemMappings     SquareItemMapping[]
@@ -75,6 +77,7 @@ model Store {
   stockMovements   StockMovement[]
   transfersFrom    StockTransfer[]   @relation("TransferFrom")
   transfersTo      StockTransfer[]   @relation("TransferTo")
+  prepPlans        PrepPlan[]
   squareConnection SquareConnection? // Each store can have its own Square account
   createdAt        DateTime          @default(now())
 }
@@ -353,6 +356,61 @@ model Notification {
 // RECIPES & MENU COSTING
 // ============================================
 
+// Recipe tags for filtering (dietary, prep method, etc.)
+model RecipeTag {
+  id          String   @id @default(cuid())
+  name        String
+  color       String   @default("#6366f1") // Hex color for display
+  accountId   String
+  account     Account  @relation(fields: [accountId], references: [id])
+  recipes     RecipeTagAssignment[]
+  createdAt   DateTime @default(now())
+
+  @@unique([name, accountId])
+}
+
+// Many-to-many relationship between recipes and tags
+model RecipeTagAssignment {
+  id        String    @id @default(cuid())
+  recipeId  String
+  recipe    Recipe    @relation(fields: [recipeId], references: [id], onDelete: Cascade)
+  tagId     String
+  tag       RecipeTag @relation(fields: [tagId], references: [id], onDelete: Cascade)
+  createdAt DateTime  @default(now())
+
+  @@unique([recipeId, tagId])
+}
+
+// Prep planning for production
+model PrepPlan {
+  id          String         @id @default(cuid())
+  name        String
+  planDate    DateTime
+  storeId     String
+  store       Store          @relation(fields: [storeId], references: [id])
+  status      String         @default("draft") // draft, in_progress, completed
+  notes       String?
+  accountId   String
+  account     Account        @relation(fields: [accountId], references: [id])
+  items       PrepPlanItem[]
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
+}
+
+// Individual items in a prep plan
+model PrepPlanItem {
+  id              String   @id @default(cuid())
+  prepPlanId      String
+  prepPlan        PrepPlan @relation(fields: [prepPlanId], references: [id], onDelete: Cascade)
+  recipeId        String
+  recipe          Recipe   @relation(fields: [recipeId], references: [id])
+  targetQuantity  Float    // How many batches/portions to prep
+  actualQuantity  Float?   // Actual amount prepped
+  completedAt     DateTime?
+  notes           String?
+  createdAt       DateTime @default(now())
+}
+
 // Recipe/Menu Item definition
 model Recipe {
   id              String             @id @default(cuid())
@@ -379,6 +437,10 @@ model Recipe {
   ingredients     RecipeIngredient[]
   // Where this recipe is used as a sub-recipe
   usedIn          RecipeIngredient[] @relation("SubRecipeIngredient")
+  // Tags for filtering
+  tags            RecipeTagAssignment[]
+  // Prep planning
+  prepPlanItems   PrepPlanItem[]
   // Square integration
   squareItemMappings SquareItemMapping[]
   createdAt       DateTime           @default(now())
