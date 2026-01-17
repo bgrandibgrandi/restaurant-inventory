@@ -117,6 +117,7 @@ export async function PUT(
     const {
       name,
       description,
+      imageUrl,
       yieldQuantity,
       yieldUnit,
       categoryId,
@@ -143,6 +144,7 @@ export async function PUT(
         data: {
           ...(name !== undefined && { name }),
           ...(description !== undefined && { description }),
+          ...(imageUrl !== undefined && { imageUrl: imageUrl || null }),
           ...(yieldQuantity !== undefined && { yieldQuantity }),
           ...(yieldUnit !== undefined && { yieldUnit }),
           ...(categoryId !== undefined && { categoryId: categoryId || null }),

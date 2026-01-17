@@ -358,6 +358,7 @@ model Recipe {
   id              String             @id @default(cuid())
   name            String
   description     String?
+  imageUrl        String?            // Base64 encoded image or URL
   yieldQuantity   Float              @default(1) // How many portions this recipe makes
   yieldUnit       String             @default("portions") // "portions", "L", "kg", etc.
   categoryId      String?

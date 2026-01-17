@@ -92,6 +92,7 @@ export async function POST(request: NextRequest) {
     const {
       name,
       description,
+      imageUrl,
       yieldQuantity,
       yieldUnit,
       categoryId,
@@ -114,6 +115,7 @@ export async function POST(request: NextRequest) {
       data: {
         name,
         description: description || null,
+        imageUrl: imageUrl || null,
         yieldQuantity: yieldQuantity || 1,
         yieldUnit: yieldUnit || 'portions',
         categoryId: categoryId || null,

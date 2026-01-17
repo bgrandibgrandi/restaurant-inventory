@@ -30,6 +30,7 @@ interface Recipe {
   id: string;
   name: string;
   description: string | null;
+  imageUrl: string | null;
   yieldQuantity: number;
   yieldUnit: string;
   isSubRecipe: boolean;
@@ -52,6 +53,7 @@ export default function RecipeDetailPage() {
   const [loading, setLoading] = useState(true);
   const [deleting, setDeleting] = useState(false);
   const [converting, setConverting] = useState(false);
+  const [duplicating, setDuplicating] = useState(false);
 
   useEffect(() => {
     fetchRecipe();
@@ -139,6 +141,28 @@ export default function RecipeDetailPage() {
     }
   };
 
+  const handleDuplicate = async () => {
+    setDuplicating(true);
+    try {
+      const response = await fetch(`/api/recipes/${params.id}/duplicate`, {
+        method: 'POST',
+      });
+
+      if (response.ok) {
+        const newRecipe = await response.json();
+        router.push(`/recipes/${newRecipe.id}/edit`);
+      } else {
+        const error = await response.json();
+        alert(error.error || 'Failed to duplicate recipe');
+      }
+    } catch (error) {
+      console.error('Error duplicating recipe:', error);
+      alert('An error occurred');
+    } finally {
+      setDuplicating(false);
+    }
+  };
+
   const formatCurrency = (amount: number) => {
     return new Intl.NumberFormat('de-DE', {
       style: 'currency',
@@ -187,6 +211,14 @@ export default function RecipeDetailPage() {
               <h1 className="text-xl font-semibold text-gray-900 truncate">{recipe.name}</h1>
             </div>
             <div className="flex items-center gap-2">
+              <button
+                onClick={handleDuplicate}
+                disabled={duplicating}
+                className="px-3 py-1.5 bg-gray-100 hover:bg-gray-200 text-gray-700 text-sm font-medium rounded-lg transition disabled:opacity-50"
+                title="Create a copy of this recipe"
+              >
+                {duplicating ? '...' : 'Duplicate'}
+              </button>
               <button
                 onClick={handleConvertToItem}
                 disabled={converting}
@@ -246,24 +278,38 @@ export default function RecipeDetailPage() {
               )}
             </div>
 
-            <div className="grid grid-cols-3 gap-4 text-center">
-              <div className="p-4 bg-blue-50 rounded-lg">
-                <div className="text-2xl font-bold text-blue-600">
-                  {formatCurrency(recipe.calculatedCost)}
+            {/* Image and Cost Grid */}
+            <div className={`${recipe.imageUrl ? 'flex gap-6' : ''}`}>
+              {recipe.imageUrl && (
+                <div className="flex-shrink-0">
+                  <img
+                    src={recipe.imageUrl}
+                    alt={recipe.name}
+                    className="w-40 h-40 object-cover rounded-lg border border-gray-200"
+                  />
                 </div>
-                <div className="text-sm text-gray-600">Total Cost</div>
-              </div>
-              <div className="p-4 bg-green-50 rounded-lg">
-                <div className="text-2xl font-bold text-green-600">
-                  {formatCurrency(recipe.costPerPortion)}
+              )}
+              <div className="flex-1">
+                <div className="grid grid-cols-3 gap-4 text-center">
+                  <div className="p-4 bg-blue-50 rounded-lg">
+                    <div className="text-2xl font-bold text-blue-600">
+                      {formatCurrency(recipe.calculatedCost)}
+                    </div>
+                    <div className="text-sm text-gray-600">Total Cost</div>
+                  </div>
+                  <div className="p-4 bg-green-50 rounded-lg">
+                    <div className="text-2xl font-bold text-green-600">
+                      {formatCurrency(recipe.costPerPortion)}
+                    </div>
+                    <div className="text-sm text-gray-600">Per {recipe.yieldUnit.replace(/s$/, '')}</div>
+                  </div>
+                  <div className="p-4 bg-gray-50 rounded-lg">
+                    <div className="text-2xl font-bold text-gray-700">
+                      {recipe.yieldQuantity} {recipe.yieldUnit}
+                    </div>
+                    <div className="text-sm text-gray-600">Yield</div>
+                  </div>
                 </div>
-                <div className="text-sm text-gray-600">Per {recipe.yieldUnit.replace(/s$/, '')}</div>
-              </div>
-              <div className="p-4 bg-gray-50 rounded-lg">
-                <div className="text-2xl font-bold text-gray-700">
-                  {recipe.yieldQuantity} {recipe.yieldUnit}
-                </div>
-                <div className="text-sm text-gray-600">Yield</div>
               </div>
             </div>
 

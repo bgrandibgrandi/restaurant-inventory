@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useParams } from 'next/navigation';
 import Link from 'next/link';
 
 interface Item {
@@ -36,11 +36,36 @@ interface Ingredient {
   notes: string;
 }
 
+interface ExistingRecipe {
+  id: string;
+  name: string;
+  description: string | null;
+  imageUrl: string | null;
+  yieldQuantity: number;
+  yieldUnit: string;
+  categoryId: string | null;
+  isSubRecipe: boolean;
+  instructions: string | null;
+  prepTime: number | null;
+  cookTime: number | null;
+  ingredients: {
+    id: string;
+    quantity: number;
+    unit: string;
+    notes: string | null;
+    wasteFactor: number;
+    item: { id: string; name: string; unit: string } | null;
+    subRecipe: { id: string; name: string; yieldQuantity: number; yieldUnit: string } | null;
+  }[];
+}
+
 const COMMON_UNITS = ['kg', 'g', 'L', 'ml', 'units', 'portions', 'pieces', 'tbsp', 'tsp', 'cups'];
 
-export default function NewRecipePage() {
+export default function EditRecipePage() {
   const router = useRouter();
+  const params = useParams();
   const [saving, setSaving] = useState(false);
+  const [loading, setLoading] = useState(true);
   const [items, setItems] = useState<Item[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
   const [subRecipes, setSubRecipes] = useState<SubRecipe[]>([]);
@@ -65,15 +90,52 @@ export default function NewRecipePage() {
 
   useEffect(() => {
     fetchData();
-  }, []);
+  }, [params.id]);
 
   const fetchData = async () => {
     try {
-      const [itemsRes, categoriesRes, recipesRes] = await Promise.all([
+      const [recipeRes, itemsRes, categoriesRes, recipesRes] = await Promise.all([
+        fetch(`/api/recipes/${params.id}`),
         fetch('/api/items'),
         fetch('/api/categories'),
         fetch('/api/recipes?includeSubRecipes=true'),
       ]);
+
+      if (!recipeRes.ok) {
+        router.push('/recipes');
+        return;
+      }
+
+      const recipe: ExistingRecipe = await recipeRes.json();
+
+      // Populate form with existing recipe data
+      setFormData({
+        name: recipe.name,
+        description: recipe.description || '',
+        imageUrl: recipe.imageUrl || '',
+        yieldQuantity: recipe.yieldQuantity.toString(),
+        yieldUnit: recipe.yieldUnit,
+        categoryId: recipe.categoryId || '',
+        isSubRecipe: recipe.isSubRecipe,
+        instructions: recipe.instructions || '',
+        prepTime: recipe.prepTime?.toString() || '',
+        cookTime: recipe.cookTime?.toString() || '',
+      });
+
+      // Convert existing ingredients to local format
+      setIngredients(
+        recipe.ingredients.map((ing) => ({
+          id: ing.id,
+          type: ing.item ? 'item' : 'subrecipe',
+          itemId: ing.item?.id,
+          subRecipeId: ing.subRecipe?.id,
+          name: ing.item?.name || ing.subRecipe?.name || '',
+          quantity: ing.quantity.toString(),
+          unit: ing.unit,
+          wasteFactor: (ing.wasteFactor * 100).toString(),
+          notes: ing.notes || '',
+        }))
+      );
 
       if (itemsRes.ok) {
         setItems(await itemsRes.json());
@@ -83,9 +145,10 @@ export default function NewRecipePage() {
       }
       if (recipesRes.ok) {
         const recipes = await recipesRes.json();
+        // Filter out current recipe from sub-recipes list
         setSubRecipes(
           recipes
-            .filter((r: any) => r.isSubRecipe)
+            .filter((r: any) => r.isSubRecipe && r.id !== params.id)
             .map((r: any) => ({
               id: r.id,
               name: r.name,
@@ -96,6 +159,9 @@ export default function NewRecipePage() {
       }
     } catch (error) {
       console.error('Error fetching data:', error);
+      router.push('/recipes');
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -151,8 +217,8 @@ export default function NewRecipePage() {
 
     setSaving(true);
     try {
-      const response = await fetch('/api/recipes', {
-        method: 'POST',
+      const response = await fetch(`/api/recipes/${params.id}`, {
+        method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           name: formData.name.trim(),
@@ -177,14 +243,13 @@ export default function NewRecipePage() {
       });
 
       if (response.ok) {
-        const recipe = await response.json();
-        router.push(`/recipes/${recipe.id}`);
+        router.push(`/recipes/${params.id}`);
       } else {
         const error = await response.json();
-        alert(error.error || 'Failed to create recipe');
+        alert(error.error || 'Failed to update recipe');
       }
     } catch (error) {
-      console.error('Error creating recipe:', error);
+      console.error('Error updating recipe:', error);
       alert('An error occurred');
     } finally {
       setSaving(false);
@@ -199,6 +264,17 @@ export default function NewRecipePage() {
     recipe.name.toLowerCase().includes(ingredientSearch.toLowerCase())
   );
 
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-center">
+          <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+          <p className="mt-4 text-gray-600">Loading recipe...</p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-gray-50">
       {/* Header */}
@@ -206,12 +282,12 @@ export default function NewRecipePage() {
         <div className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center h-16">
             <div className="flex items-center gap-4">
-              <Link href="/recipes" className="text-gray-600 hover:text-gray-900">
+              <Link href={`/recipes/${params.id}`} className="text-gray-600 hover:text-gray-900">
                 <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
                 </svg>
               </Link>
-              <h1 className="text-xl font-semibold text-gray-900">New Recipe</h1>
+              <h1 className="text-xl font-semibold text-gray-900">Edit Recipe</h1>
             </div>
           </div>
         </div>
@@ -533,10 +609,10 @@ export default function NewRecipePage() {
               disabled={saving}
               className="flex-1 bg-blue-600 hover:bg-blue-700 text-white font-medium py-3 px-6 rounded-lg transition disabled:opacity-50"
             >
-              {saving ? 'Creating...' : 'Create Recipe'}
+              {saving ? 'Saving...' : 'Save Changes'}
             </button>
             <Link
-              href="/recipes"
+              href={`/recipes/${params.id}`}
               className="flex-1 bg-gray-200 hover:bg-gray-300 text-gray-700 font-medium py-3 px-6 rounded-lg text-center transition"
             >
               Cancel
