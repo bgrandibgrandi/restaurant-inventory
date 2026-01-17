@@ -545,11 +545,25 @@ async function handleConfirmation(invoiceId: string, invoice: any, accountId: st
         },
       });
     } else if (itemId) {
-      // Update existing item's cost price if invoice has unit price
+      // Update existing item's cost price and supplier if invoice has them
+      const updateData: Record<string, unknown> = {};
       if (item.unitPrice) {
+        updateData.costPrice = item.unitPrice;
+      }
+      // Also link supplier if item doesn't have one and invoice does
+      if (invoice.supplierId) {
+        const existingItem = await prisma.item.findUnique({
+          where: { id: itemId },
+          select: { supplierId: true },
+        });
+        if (!existingItem?.supplierId) {
+          updateData.supplierId = invoice.supplierId;
+        }
+      }
+      if (Object.keys(updateData).length > 0) {
         await prisma.item.update({
           where: { id: itemId },
-          data: { costPrice: item.unitPrice },
+          data: updateData,
         });
       }
       // Mark as confirmed
