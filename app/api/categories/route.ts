@@ -1,9 +1,19 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { getServerSession } from 'next-auth';
+import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/db';
 
 export async function GET() {
   try {
+    const session = await getServerSession(authOptions);
+    if (!session?.user?.accountId) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
     const categories = await prisma.category.findMany({
+      where: {
+        accountId: session.user.accountId,
+      },
       orderBy: {
         name: 'asc',
       },
@@ -23,8 +33,13 @@ export async function GET() {
 
 export async function POST(request: NextRequest) {
   try {
+    const session = await getServerSession(authOptions);
+    if (!session?.user?.accountId) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
     const body = await request.json();
-    const { name, parentId, accountId } = body;
+    const { name, parentId } = body;
 
     if (!name) {
       return NextResponse.json(
@@ -37,7 +52,7 @@ export async function POST(request: NextRequest) {
       data: {
         name,
         parentId: parentId || null,
-        accountId: accountId || 'default-account',
+        accountId: session.user.accountId,
       },
     });
 

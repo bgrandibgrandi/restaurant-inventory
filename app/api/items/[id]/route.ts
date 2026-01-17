@@ -1,4 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { getServerSession } from 'next-auth';
+import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/db';
 
 export async function GET(
@@ -6,9 +8,17 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const session = await getServerSession(authOptions);
+    if (!session?.user?.accountId) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
     const { id } = await params;
-    const item = await prisma.item.findUnique({
-      where: { id },
+    const item = await prisma.item.findFirst({
+      where: {
+        id,
+        accountId: session.user.accountId,
+      },
       include: {
         category: true,
         supplier: true,
@@ -34,7 +44,25 @@ export async function PUT(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const session = await getServerSession(authOptions);
+    if (!session?.user?.accountId) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
     const { id } = await params;
+
+    // Verify item belongs to user's account
+    const existingItem = await prisma.item.findFirst({
+      where: {
+        id,
+        accountId: session.user.accountId,
+      },
+    });
+
+    if (!existingItem) {
+      return NextResponse.json({ error: 'Item not found' }, { status: 404 });
+    }
+
     const body = await request.json();
     const {
       name,
@@ -84,7 +112,25 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const session = await getServerSession(authOptions);
+    if (!session?.user?.accountId) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
     const { id } = await params;
+
+    // Verify item belongs to user's account
+    const existingItem = await prisma.item.findFirst({
+      where: {
+        id,
+        accountId: session.user.accountId,
+      },
+    });
+
+    if (!existingItem) {
+      return NextResponse.json({ error: 'Item not found' }, { status: 404 });
+    }
+
     // Delete associated stock entries first
     await prisma.stockEntry.deleteMany({
       where: { itemId: id },

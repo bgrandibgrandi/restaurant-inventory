@@ -1,12 +1,23 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { getServerSession } from 'next-auth';
+import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/db';
 
 // Get all items (master catalog)
 export async function GET() {
   try {
+    const session = await getServerSession(authOptions);
+    if (!session?.user?.accountId) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
     const items = await prisma.item.findMany({
+      where: {
+        accountId: session.user.accountId,
+      },
       include: {
         category: true,
+        supplier: true,
       },
       orderBy: {
         name: 'asc',
@@ -25,8 +36,13 @@ export async function GET() {
 // Create new item in master catalog
 export async function POST(request: NextRequest) {
   try {
+    const session = await getServerSession(authOptions);
+    if (!session?.user?.accountId) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
     const body = await request.json();
-    const { name, description, unit, categoryId, accountId } = body;
+    const { name, description, unit, categoryId, supplierId } = body;
 
     if (!name || !unit) {
       return NextResponse.json(
@@ -41,10 +57,12 @@ export async function POST(request: NextRequest) {
         description: description || null,
         unit,
         categoryId: categoryId || null,
-        accountId: accountId || 'default-account',
+        supplierId: supplierId || null,
+        accountId: session.user.accountId,
       },
       include: {
         category: true,
+        supplier: true,
       },
     });
 
