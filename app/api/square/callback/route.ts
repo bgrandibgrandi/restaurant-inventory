@@ -44,6 +44,7 @@ export async function GET(request: NextRequest) {
       : 'https://connect.squareup.com';
 
     // Exchange code for access token
+    const redirectUri = `${process.env.NEXTAUTH_URL}/api/square/callback`;
     const tokenResponse = await fetch(`${baseUrl}/oauth2/token`, {
       method: 'POST',
       headers: {
@@ -55,6 +56,7 @@ export async function GET(request: NextRequest) {
         client_secret: process.env.SQUARE_APPLICATION_SECRET,
         code,
         grant_type: 'authorization_code',
+        redirect_uri: redirectUri,
         short_lived: false,
       }),
     });
