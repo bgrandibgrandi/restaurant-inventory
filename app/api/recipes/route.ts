@@ -101,6 +101,9 @@ export async function POST(request: NextRequest) {
       prepTime,
       cookTime,
       ingredients,
+      steps,
+      equipment,
+      squareItemId,
     } = body;
 
     if (!name) {
@@ -110,7 +113,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Create recipe with ingredients in a transaction
+    // Create recipe with ingredients and steps in a transaction
     const recipe = await prisma.recipe.create({
       data: {
         name,
@@ -123,6 +126,8 @@ export async function POST(request: NextRequest) {
         instructions: instructions || null,
         prepTime: prepTime || null,
         cookTime: cookTime || null,
+        equipment: equipment ? JSON.stringify(equipment) : null,
+        squareItemId: squareItemId || null,
         accountId: session.user.accountId,
         ingredients: {
           create: (ingredients || []).map((ing: any) => ({
@@ -134,6 +139,16 @@ export async function POST(request: NextRequest) {
             wasteFactor: ing.wasteFactor || 0,
           })),
         },
+        steps: {
+          create: (steps || []).map((step: any, index: number) => ({
+            stepNumber: index + 1,
+            title: step.title || null,
+            instruction: step.instruction,
+            imageUrl: step.imageUrl || null,
+            duration: step.duration || null,
+            notes: step.notes || null,
+          })),
+        },
       },
       include: {
         category: true,
@@ -142,6 +157,9 @@ export async function POST(request: NextRequest) {
             item: true,
             subRecipe: true,
           },
+        },
+        steps: {
+          orderBy: { stepNumber: 'asc' },
         },
       },
     });

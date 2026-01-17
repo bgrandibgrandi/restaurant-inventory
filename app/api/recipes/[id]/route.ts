@@ -67,6 +67,9 @@ export async function GET(
             variation: true,
           },
         },
+        steps: {
+          orderBy: { stepNumber: 'asc' },
+        },
       },
     });
 
@@ -77,8 +80,19 @@ export async function GET(
     // Calculate costs
     const calculatedCost = calculateRecipeCost(recipe);
 
+    // Parse equipment JSON if exists
+    let equipment: string[] = [];
+    if (recipe.equipment) {
+      try {
+        equipment = JSON.parse(recipe.equipment);
+      } catch {
+        equipment = [];
+      }
+    }
+
     return NextResponse.json({
       ...recipe,
+      equipment,
       calculatedCost,
       costPerPortion: calculatedCost / recipe.yieldQuantity,
     });
@@ -127,13 +141,23 @@ export async function PUT(
       prepTime,
       cookTime,
       ingredients,
+      steps,
+      equipment,
+      squareItemId,
     } = body;
 
-    // Update recipe and replace ingredients in a transaction
+    // Update recipe and replace ingredients/steps in a transaction
     const recipe = await prisma.$transaction(async (tx) => {
       // Delete existing ingredients if new ones provided
       if (ingredients !== undefined) {
         await tx.recipeIngredient.deleteMany({
+          where: { recipeId: id },
+        });
+      }
+
+      // Delete existing steps if new ones provided
+      if (steps !== undefined) {
+        await tx.recipeStep.deleteMany({
           where: { recipeId: id },
         });
       }
@@ -153,6 +177,8 @@ export async function PUT(
           ...(instructions !== undefined && { instructions }),
           ...(prepTime !== undefined && { prepTime }),
           ...(cookTime !== undefined && { cookTime }),
+          ...(equipment !== undefined && { equipment: equipment ? JSON.stringify(equipment) : null }),
+          ...(squareItemId !== undefined && { squareItemId: squareItemId || null }),
           ...(ingredients !== undefined && {
             ingredients: {
               create: ingredients.map((ing: any) => ({
@@ -165,6 +191,18 @@ export async function PUT(
               })),
             },
           }),
+          ...(steps !== undefined && {
+            steps: {
+              create: steps.map((step: any, index: number) => ({
+                stepNumber: index + 1,
+                title: step.title || null,
+                instruction: step.instruction,
+                imageUrl: step.imageUrl || null,
+                duration: step.duration || null,
+                notes: step.notes || null,
+              })),
+            },
+          }),
         },
         include: {
           category: true,
@@ -173,6 +211,9 @@ export async function PUT(
               item: true,
               subRecipe: true,
             },
+          },
+          steps: {
+            orderBy: { stepNumber: 'asc' },
           },
         },
       });

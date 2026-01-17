@@ -365,9 +365,15 @@ model Recipe {
   category        Category?          @relation(fields: [categoryId], references: [id])
   isSubRecipe     Boolean            @default(false) // True for sauces, prep items that are used in other recipes
   isActive        Boolean            @default(true)
-  instructions    String?            // Optional cooking instructions
+  instructions    String?            // Optional cooking instructions (legacy, kept for backwards compatibility)
   prepTime        Int?               // Prep time in minutes
   cookTime        Int?               // Cook time in minutes
+  // Structured instructions with step-by-step photos
+  steps           RecipeStep[]
+  // Equipment/tools needed
+  equipment       String?            // JSON array of equipment names
+  // Square item this recipe is linked from (for auto-suggestion)
+  squareItemId    String?            // Square catalog item ID this recipe was created from
   accountId       String
   account         Account            @relation(fields: [accountId], references: [id])
   ingredients     RecipeIngredient[]
@@ -377,6 +383,22 @@ model Recipe {
   squareItemMappings SquareItemMapping[]
   createdAt       DateTime           @default(now())
   updatedAt       DateTime           @updatedAt
+}
+
+// Step-by-step recipe instructions with optional photos
+model RecipeStep {
+  id          String   @id @default(cuid())
+  recipeId    String
+  recipe      Recipe   @relation(fields: [recipeId], references: [id], onDelete: Cascade)
+  stepNumber  Int      // Order of the step
+  title       String?  // Optional step title like "Prep the vegetables"
+  instruction String   // The actual instruction text
+  imageUrl    String?  // Optional photo for this step (base64)
+  duration    Int?     // Optional duration in minutes for this step
+  notes       String?  // Optional tips or notes for this step
+  createdAt   DateTime @default(now())
+
+  @@index([recipeId, stepNumber])
 }
 
 // Ingredient in a recipe - can be an Item or another Recipe (sub-recipe)
