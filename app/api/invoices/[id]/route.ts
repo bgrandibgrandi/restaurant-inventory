@@ -47,7 +47,19 @@ export async function GET(
       );
     }
 
-    return NextResponse.json(invoice);
+    // If there's a suggested supplier match, fetch it
+    let suggestedSupplierMatch = null;
+    if (invoice.suggestedSupplierMatchId) {
+      suggestedSupplierMatch = await prisma.supplier.findUnique({
+        where: { id: invoice.suggestedSupplierMatchId },
+        select: { id: true, name: true },
+      });
+    }
+
+    return NextResponse.json({
+      ...invoice,
+      suggestedSupplierMatch,
+    });
   } catch (error) {
     console.error('Error fetching invoice:', error);
     return NextResponse.json(
@@ -126,6 +138,41 @@ export async function PUT(
       await prisma.invoiceItem.update({
         where: { id: itemId },
         data: { status: 'skipped' },
+      });
+
+      return NextResponse.json({ success: true });
+    }
+
+    // Handle updating supplier mapping
+    if (body.action === 'update_supplier') {
+      const { supplierId } = body;
+
+      const updatedInvoice = await prisma.invoice.update({
+        where: { id },
+        data: {
+          supplierId: supplierId || null,
+          newSupplierDetected: false,
+        },
+        include: {
+          store: true,
+          supplier: true,
+          items: {
+            include: {
+              matchedItem: true,
+              category: true,
+            },
+          },
+        },
+      });
+
+      return NextResponse.json(updatedInvoice);
+    }
+
+    // Handle dismissing supplier dialog
+    if (body.action === 'dismiss_supplier_dialog') {
+      await prisma.invoice.update({
+        where: { id },
+        data: { newSupplierDetected: false },
       });
 
       return NextResponse.json({ success: true });
@@ -294,40 +341,65 @@ Respond in JSON format:
 
     const extractedData = JSON.parse(jsonStr.trim());
 
-    // Try to match or create supplier
+    // Try to match supplier (don't auto-create, let user confirm)
     let supplierId: string | null = null;
+    let newSupplierDetected = false;
+    let suggestedSupplierMatchId: string | null = null;
+
     if (extractedData.supplierName) {
-      // First, try to find existing supplier (case-insensitive)
-      const existingSupplier = await prisma.supplier.findFirst({
+      const supplierName = extractedData.supplierName.trim();
+
+      // First, try to find exact match (case-insensitive)
+      const exactMatch = await prisma.supplier.findFirst({
         where: {
           accountId,
           name: {
-            equals: extractedData.supplierName.trim(),
+            equals: supplierName,
             mode: 'insensitive',
           },
         },
       });
 
-      if (existingSupplier) {
-        supplierId = existingSupplier.id;
+      if (exactMatch) {
+        supplierId = exactMatch.id;
       } else {
-        // Create new supplier
-        const newSupplier = await prisma.supplier.create({
-          data: {
-            name: extractedData.supplierName.trim(),
-            accountId,
-          },
+        // Look for similar suppliers (fuzzy match)
+        const allSuppliers = await prisma.supplier.findMany({
+          where: { accountId },
+          select: { id: true, name: true },
         });
-        supplierId = newSupplier.id;
+
+        // Simple similarity check: contains or starts with similar words
+        const supplierWords = supplierName.toLowerCase().split(/\s+/);
+        const similarSupplier = allSuppliers.find(s => {
+          const existingWords = s.name.toLowerCase().split(/\s+/);
+          // Check if any significant words match
+          return supplierWords.some((word: string) =>
+            word.length > 2 && existingWords.some((existing: string) =>
+              existing.includes(word) || word.includes(existing)
+            )
+          );
+        });
+
+        if (similarSupplier) {
+          // Found a similar supplier, ask user to confirm
+          suggestedSupplierMatchId = similarSupplier.id;
+          newSupplierDetected = true;
+        } else {
+          // No similar supplier found, need user to create or select
+          newSupplierDetected = true;
+        }
       }
     }
 
-    // Update invoice with extracted metadata and linked supplier
+    // Update invoice with extracted metadata
     await prisma.invoice.update({
       where: { id: invoiceId },
       data: {
         supplierName: extractedData.supplierName,
         supplierId,
+        newSupplierDetected,
+        suggestedSupplierMatchId,
         invoiceNumber: extractedData.invoiceNumber,
         invoiceDate: extractedData.invoiceDate ? new Date(extractedData.invoiceDate) : null,
         totalAmount: extractedData.totalAmount,
@@ -392,7 +464,20 @@ Respond in JSON format:
       },
     });
 
-    return NextResponse.json(updatedInvoice);
+    // If there's a suggested supplier match, fetch it
+    let suggestedSupplierMatch = null;
+    if (suggestedSupplierMatchId) {
+      suggestedSupplierMatch = await prisma.supplier.findUnique({
+        where: { id: suggestedSupplierMatchId },
+        select: { id: true, name: true },
+      });
+    }
+
+    return NextResponse.json({
+      ...updatedInvoice,
+      newSupplierDetected,
+      suggestedSupplierMatch,
+    });
   } catch (error) {
     console.error('Extraction error:', error);
 

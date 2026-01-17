@@ -160,28 +160,30 @@ model Supplier {
 
 // Invoice import for tracking purchases
 model Invoice {
-  id              String        @id @default(cuid())
-  invoiceNumber   String?       // Original invoice number from supplier
-  supplierId      String?
-  supplier        Supplier?     @relation(fields: [supplierId], references: [id])
-  supplierName    String?       // Extracted supplier name (before linking)
-  storeId         String
-  store           Store         @relation(fields: [storeId], references: [id])
-  userId          String        // Who uploaded it
-  user            User          @relation(fields: [userId], references: [id])
-  accountId       String
-  account         Account       @relation(fields: [accountId], references: [id])
-  invoiceDate     DateTime?     // Date on the invoice
-  totalAmount     Float?        // Total invoice amount
-  currency        String        @default("EUR")
-  status          String        @default("pending") // pending, processing, reviewed, confirmed, error
-  fileUrl         String?       // Stored file URL/path
-  fileName        String?
-  extractedData   String?       // JSON of AI-extracted data
-  items           InvoiceItem[]
-  notes           String?
-  createdAt       DateTime      @default(now())
-  updatedAt       DateTime      @updatedAt
+  id                      String        @id @default(cuid())
+  invoiceNumber           String?       // Original invoice number from supplier
+  supplierId              String?
+  supplier                Supplier?     @relation(fields: [supplierId], references: [id])
+  supplierName            String?       // Extracted supplier name (before linking)
+  newSupplierDetected     Boolean       @default(false) // Flag to show supplier confirmation dialog
+  suggestedSupplierMatchId String?      // ID of similar supplier found during extraction
+  storeId                 String
+  store                   Store         @relation(fields: [storeId], references: [id])
+  userId                  String        // Who uploaded it
+  user                    User          @relation(fields: [userId], references: [id])
+  accountId               String
+  account                 Account       @relation(fields: [accountId], references: [id])
+  invoiceDate             DateTime?     // Date on the invoice
+  totalAmount             Float?        // Total invoice amount
+  currency                String        @default("EUR")
+  status                  String        @default("pending") // pending, processing, reviewed, confirmed, error
+  fileUrl                 String?       // Stored file URL/path
+  fileName                String?
+  extractedData           String?       // JSON of AI-extracted data
+  items                   InvoiceItem[]
+  notes                   String?
+  createdAt               DateTime      @default(now())
+  updatedAt               DateTime      @updatedAt
 }
 
 // Individual line items extracted from invoice

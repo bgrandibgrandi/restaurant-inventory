@@ -15,6 +15,11 @@ type Item = {
   unit: string;
 };
 
+type Supplier = {
+  id: string;
+  name: string;
+};
+
 type InvoiceItem = {
   id: string;
   rawName: string;
@@ -37,6 +42,8 @@ type Invoice = {
   fileUrl: string | null;
   invoiceNumber: string | null;
   supplierName: string | null;
+  supplierId: string | null;
+  supplier: Supplier | null;
   invoiceDate: string | null;
   status: string;
   totalAmount: number | null;
@@ -44,6 +51,8 @@ type Invoice = {
   store: { id: string; name: string };
   items: InvoiceItem[];
   createdAt: string;
+  newSupplierDetected?: boolean;
+  suggestedSupplierMatch?: Supplier | null;
 };
 
 export default function InvoiceDetailPage() {
@@ -54,10 +63,17 @@ export default function InvoiceDetailPage() {
   const [invoice, setInvoice] = useState<Invoice | null>(null);
   const [categories, setCategories] = useState<Category[]>([]);
   const [existingItems, setExistingItems] = useState<Item[]>([]);
+  const [suppliers, setSuppliers] = useState<Supplier[]>([]);
   const [loading, setLoading] = useState(true);
   const [extracting, setExtracting] = useState(false);
   const [confirming, setConfirming] = useState(false);
   const [editingItem, setEditingItem] = useState<string | null>(null);
+  const [showSupplierDialog, setShowSupplierDialog] = useState(false);
+  const [supplierDialogType, setSupplierDialogType] = useState<'new' | 'match' | null>(null);
+  const [pendingSupplierName, setPendingSupplierName] = useState<string | null>(null);
+  const [suggestedSupplierMatch, setSuggestedSupplierMatch] = useState<Supplier | null>(null);
+  const [selectedSupplierId, setSelectedSupplierId] = useState<string>('');
+  const [savingSupplier, setSavingSupplier] = useState(false);
 
   useEffect(() => {
     fetchData();
@@ -65,10 +81,11 @@ export default function InvoiceDetailPage() {
 
   const fetchData = async () => {
     try {
-      const [invoiceRes, categoriesRes, itemsRes] = await Promise.all([
+      const [invoiceRes, categoriesRes, itemsRes, suppliersRes] = await Promise.all([
         fetch(`/api/invoices/${invoiceId}`),
         fetch('/api/categories'),
         fetch('/api/items'),
+        fetch('/api/suppliers'),
       ]);
 
       if (!invoiceRes.ok) {
@@ -76,15 +93,29 @@ export default function InvoiceDetailPage() {
         return;
       }
 
-      const [invoiceData, categoriesData, itemsData] = await Promise.all([
+      const [invoiceData, categoriesData, itemsData, suppliersData] = await Promise.all([
         invoiceRes.json(),
         categoriesRes.json(),
         itemsRes.json(),
+        suppliersRes.json(),
       ]);
 
       setInvoice(invoiceData);
       setCategories(categoriesData);
       setExistingItems(itemsData);
+      setSuppliers(suppliersData);
+
+      // Check if we need to show supplier dialog after extraction
+      if (invoiceData.newSupplierDetected && invoiceData.supplierName) {
+        setPendingSupplierName(invoiceData.supplierName);
+        if (invoiceData.suggestedSupplierMatch) {
+          setSuggestedSupplierMatch(invoiceData.suggestedSupplierMatch);
+          setSupplierDialogType('match');
+        } else {
+          setSupplierDialogType('new');
+        }
+        setShowSupplierDialog(true);
+      }
     } catch (error) {
       console.error('Error fetching data:', error);
     } finally {
@@ -104,6 +135,18 @@ export default function InvoiceDetailPage() {
       if (response.ok) {
         const updatedInvoice = await response.json();
         setInvoice(updatedInvoice);
+
+        // Check if we need to show supplier confirmation dialog
+        if (updatedInvoice.newSupplierDetected && updatedInvoice.supplierName) {
+          setPendingSupplierName(updatedInvoice.supplierName);
+          if (updatedInvoice.suggestedSupplierMatch) {
+            setSuggestedSupplierMatch(updatedInvoice.suggestedSupplierMatch);
+            setSupplierDialogType('match');
+          } else {
+            setSupplierDialogType('new');
+          }
+          setShowSupplierDialog(true);
+        }
       } else {
         const error = await response.json();
         alert(`Extraction failed: ${error.error}`);
@@ -114,6 +157,81 @@ export default function InvoiceDetailPage() {
     } finally {
       setExtracting(false);
     }
+  };
+
+  const handleUpdateSupplier = async (supplierId: string) => {
+    setSavingSupplier(true);
+    try {
+      const response = await fetch(`/api/invoices/${invoiceId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'update_supplier',
+          supplierId,
+        }),
+      });
+
+      if (response.ok) {
+        const updatedInvoice = await response.json();
+        setInvoice(updatedInvoice);
+        // Refresh suppliers list
+        const suppliersRes = await fetch('/api/suppliers');
+        if (suppliersRes.ok) {
+          const suppliersData = await suppliersRes.json();
+          setSuppliers(suppliersData);
+        }
+      }
+    } catch (error) {
+      console.error('Error updating supplier:', error);
+    } finally {
+      setSavingSupplier(false);
+      setShowSupplierDialog(false);
+      setSupplierDialogType(null);
+      setPendingSupplierName(null);
+      setSuggestedSupplierMatch(null);
+    }
+  };
+
+  const handleCreateNewSupplier = async () => {
+    if (!pendingSupplierName) return;
+
+    setSavingSupplier(true);
+    try {
+      // Create the new supplier
+      const createRes = await fetch('/api/suppliers', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: pendingSupplierName }),
+      });
+
+      if (createRes.ok) {
+        const newSupplier = await createRes.json();
+        // Link to invoice
+        await handleUpdateSupplier(newSupplier.id);
+      }
+    } catch (error) {
+      console.error('Error creating supplier:', error);
+      setSavingSupplier(false);
+    }
+  };
+
+  const handleDismissSupplierDialog = async () => {
+    // Clear the newSupplierDetected flag
+    try {
+      await fetch(`/api/invoices/${invoiceId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'dismiss_supplier_dialog',
+        }),
+      });
+    } catch (error) {
+      console.error('Error dismissing dialog:', error);
+    }
+    setShowSupplierDialog(false);
+    setSupplierDialogType(null);
+    setPendingSupplierName(null);
+    setSuggestedSupplierMatch(null);
   };
 
   const handleUpdateItem = async (itemId: string, updates: Partial<InvoiceItem>) => {
@@ -220,6 +338,128 @@ export default function InvoiceDetailPage() {
 
   return (
     <div className="min-h-screen bg-gray-50 pb-24">
+      {/* Supplier Confirmation Dialog */}
+      {showSupplierDialog && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-xl max-w-md w-full p-6">
+            {supplierDialogType === 'new' ? (
+              <>
+                <div className="w-12 h-12 mx-auto bg-yellow-100 rounded-full flex items-center justify-center mb-4">
+                  <svg className="w-6 h-6 text-yellow-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                  </svg>
+                </div>
+                <h3 className="text-lg font-semibold text-gray-900 text-center mb-2">
+                  New Supplier Detected
+                </h3>
+                <p className="text-gray-600 text-center mb-4">
+                  The supplier &quot;<strong>{pendingSupplierName}</strong>&quot; was found on this invoice but doesn&apos;t exist in your system.
+                </p>
+                <div className="space-y-3">
+                  <button
+                    onClick={handleCreateNewSupplier}
+                    disabled={savingSupplier}
+                    className="w-full py-3 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-lg transition disabled:opacity-50"
+                  >
+                    {savingSupplier ? 'Creating...' : `Create "${pendingSupplierName}"`}
+                  </button>
+                  <div className="text-center text-gray-500 text-sm">or map to existing supplier</div>
+                  <select
+                    value={selectedSupplierId}
+                    onChange={(e) => setSelectedSupplierId(e.target.value)}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
+                  >
+                    <option value="">Select existing supplier...</option>
+                    {suppliers.map((s) => (
+                      <option key={s.id} value={s.id}>{s.name}</option>
+                    ))}
+                  </select>
+                  {selectedSupplierId && (
+                    <button
+                      onClick={() => handleUpdateSupplier(selectedSupplierId)}
+                      disabled={savingSupplier}
+                      className="w-full py-2 bg-green-600 hover:bg-green-700 text-white font-medium rounded-lg transition disabled:opacity-50"
+                    >
+                      Map to Selected Supplier
+                    </button>
+                  )}
+                  <button
+                    onClick={handleDismissSupplierDialog}
+                    className="w-full py-2 text-gray-600 hover:text-gray-800 font-medium"
+                  >
+                    Skip for now
+                  </button>
+                </div>
+              </>
+            ) : (
+              <>
+                <div className="w-12 h-12 mx-auto bg-blue-100 rounded-full flex items-center justify-center mb-4">
+                  <svg className="w-6 h-6 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                </div>
+                <h3 className="text-lg font-semibold text-gray-900 text-center mb-2">
+                  Confirm Supplier Match
+                </h3>
+                <p className="text-gray-600 text-center mb-4">
+                  &quot;<strong>{pendingSupplierName}</strong>&quot; looks similar to an existing supplier. Is this the same?
+                </p>
+                {suggestedSupplierMatch && (
+                  <div className="bg-gray-50 rounded-lg p-3 mb-4">
+                    <div className="text-sm text-gray-500">Suggested match:</div>
+                    <div className="font-medium text-gray-900">{suggestedSupplierMatch.name}</div>
+                  </div>
+                )}
+                <div className="space-y-3">
+                  {suggestedSupplierMatch && (
+                    <button
+                      onClick={() => handleUpdateSupplier(suggestedSupplierMatch.id)}
+                      disabled={savingSupplier}
+                      className="w-full py-3 bg-green-600 hover:bg-green-700 text-white font-medium rounded-lg transition disabled:opacity-50"
+                    >
+                      {savingSupplier ? 'Linking...' : `Yes, use "${suggestedSupplierMatch.name}"`}
+                    </button>
+                  )}
+                  <button
+                    onClick={handleCreateNewSupplier}
+                    disabled={savingSupplier}
+                    className="w-full py-2 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-lg transition disabled:opacity-50"
+                  >
+                    {savingSupplier ? 'Creating...' : `No, create "${pendingSupplierName}"`}
+                  </button>
+                  <div className="text-center text-gray-500 text-sm">or select different supplier</div>
+                  <select
+                    value={selectedSupplierId}
+                    onChange={(e) => setSelectedSupplierId(e.target.value)}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
+                  >
+                    <option value="">Select different supplier...</option>
+                    {suppliers.filter(s => s.id !== suggestedSupplierMatch?.id).map((s) => (
+                      <option key={s.id} value={s.id}>{s.name}</option>
+                    ))}
+                  </select>
+                  {selectedSupplierId && (
+                    <button
+                      onClick={() => handleUpdateSupplier(selectedSupplierId)}
+                      disabled={savingSupplier}
+                      className="w-full py-2 bg-gray-600 hover:bg-gray-700 text-white font-medium rounded-lg transition disabled:opacity-50"
+                    >
+                      Map to Selected Supplier
+                    </button>
+                  )}
+                  <button
+                    onClick={handleDismissSupplierDialog}
+                    className="w-full py-2 text-gray-600 hover:text-gray-800 font-medium"
+                  >
+                    Skip for now
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
+        </div>
+      )}
+
       {/* Header */}
       <header className="bg-white border-b border-gray-200 sticky top-0 z-10">
         <div className="max-w-4xl mx-auto px-4 py-3">
@@ -231,7 +471,7 @@ export default function InvoiceDetailPage() {
             </Link>
             <div className="text-center">
               <h1 className="text-lg font-semibold text-gray-900">
-                {invoice.supplierName || 'Invoice'}
+                {invoice.supplier?.name || invoice.supplierName || 'Invoice'}
               </h1>
               <p className="text-xs text-gray-500">{invoice.store.name}</p>
             </div>
@@ -271,6 +511,31 @@ export default function InvoiceDetailPage() {
               </div>
             )}
           </div>
+
+          {/* Manual Supplier Mapping */}
+          {invoice.status !== 'pending' && (
+            <div className="mt-4 pt-4 border-t border-gray-100">
+              <div className="flex items-center gap-3">
+                <span className="text-sm text-gray-500">Supplier:</span>
+                <select
+                  value={invoice.supplierId || ''}
+                  onChange={(e) => handleUpdateSupplier(e.target.value)}
+                  disabled={savingSupplier}
+                  className="flex-1 px-3 py-2 border border-gray-300 rounded-lg text-sm disabled:opacity-50"
+                >
+                  <option value="">No supplier linked</option>
+                  {suppliers.map((s) => (
+                    <option key={s.id} value={s.id}>{s.name}</option>
+                  ))}
+                </select>
+                {invoice.supplierName && !invoice.supplierId && (
+                  <span className="text-xs text-yellow-600 bg-yellow-50 px-2 py-1 rounded">
+                    Extracted: {invoice.supplierName}
+                  </span>
+                )}
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Extract Button - show if pending */}
