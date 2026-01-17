@@ -238,8 +238,8 @@ For each item, provide:
 - rawName: The exact name as written on the invoice
 - quantity: The quantity purchased (number only)
 - unit: The unit of measurement (kg, L, pieces, boxes, cases, etc.)
-- unitPrice: Price per unit (number only, no currency symbol)
-- totalPrice: Total price for this line (number only)
+- unitPrice: Price PER SINGLE UNIT (number only, no currency symbol). This is the cost for ONE unit, NOT the total line price. Calculate this by dividing total by quantity if needed.
+- totalPrice: Total price for this entire line item (quantity × unitPrice)
 
 Also extract if visible:
 - supplierName: The vendor/supplier name
@@ -432,13 +432,20 @@ Respond in JSON format:
         }
       }
 
+      // Calculate unitPrice from totalPrice if unitPrice is missing
+      let unitPrice = item.unitPrice;
+      const quantity = item.quantity || 0;
+      if (!unitPrice && item.totalPrice && quantity > 0) {
+        unitPrice = item.totalPrice / quantity;
+      }
+
       await prisma.invoiceItem.create({
         data: {
           invoiceId,
           rawName: item.rawName,
-          quantity: item.quantity || 0,
+          quantity,
           unit: item.unit,
-          unitPrice: item.unitPrice,
+          unitPrice,
           totalPrice: item.totalPrice,
           suggestedName: item.suggestedName,
           suggestedUnit: item.suggestedUnit,
