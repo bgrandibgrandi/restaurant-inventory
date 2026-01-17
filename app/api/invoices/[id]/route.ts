@@ -178,6 +178,51 @@ export async function PUT(
       return NextResponse.json({ success: true });
     }
 
+    // Handle dismissing mismatch warning
+    if (body.action === 'dismiss_mismatch') {
+      await prisma.invoice.update({
+        where: { id },
+        data: { mismatchDismissed: true },
+      });
+
+      return NextResponse.json({ success: true });
+    }
+
+    // Handle changing the store for an invoice
+    if (body.action === 'change_store') {
+      const { newStoreId } = body;
+
+      // Verify the new store belongs to the account
+      const newStore = await prisma.store.findFirst({
+        where: { id: newStoreId, accountId: session.user.accountId },
+      });
+
+      if (!newStore) {
+        return NextResponse.json({ error: 'Store not found' }, { status: 404 });
+      }
+
+      const updatedInvoice = await prisma.invoice.update({
+        where: { id },
+        data: {
+          storeId: newStoreId,
+          potentialMismatch: false,
+          mismatchDismissed: true,
+        },
+        include: {
+          store: true,
+          supplier: true,
+          items: {
+            include: {
+              matchedItem: true,
+              category: true,
+            },
+          },
+        },
+      });
+
+      return NextResponse.json(updatedInvoice);
+    }
+
     return NextResponse.json(
       { error: 'Invalid action' },
       { status: 400 }
@@ -211,13 +256,21 @@ async function handleExtraction(invoiceId: string, invoice: any, accountId: stri
   try {
     const anthropic = new Anthropic({ apiKey });
 
-    // Get existing items and categories for matching
-    const [existingItems, categories] = await Promise.all([
+    // Get existing items, categories, and store info for matching
+    const [existingItems, categories, store, allStores] = await Promise.all([
       prisma.item.findMany({
         where: { accountId },
         select: { id: true, name: true, unit: true },
       }),
       prisma.category.findMany({
+        where: { accountId },
+        select: { id: true, name: true },
+      }),
+      prisma.store.findUnique({
+        where: { id: invoice.storeId },
+        select: { id: true, name: true, address: true },
+      }),
+      prisma.store.findMany({
         where: { accountId },
         select: { id: true, name: true },
       }),
@@ -242,10 +295,16 @@ For each item, provide:
 - totalPrice: Total price for this entire line item (quantity × unitPrice)
 
 Also extract if visible:
-- supplierName: The vendor/supplier name
+- supplierName: The vendor/supplier name (who is SENDING the invoice)
+- recipientName: The customer/recipient name (who the invoice is addressed TO - look for "Bill To", "Deliver To", "Ship To", "Customer", or the business name receiving the goods). This is crucial for verification.
+- recipientAddress: The delivery/billing address if visible
 - invoiceNumber: Invoice or receipt number
 - invoiceDate: Date in YYYY-MM-DD format
 - totalAmount: Total invoice amount
+
+IMPORTANT: The invoice is being uploaded to a venue called "${store?.name || 'Unknown'}".
+${store?.address ? `Address: ${store.address}` : ''}
+Please check if the recipient/customer on the invoice matches this venue. If they don't match, this could indicate the invoice was uploaded to the wrong venue.
 
 Here are existing items in the system that you should try to match:
 ${existingItems.map(i => `- "${i.name}" (${i.unit})`).join('\n') || '(No existing items yet)'}
@@ -263,9 +322,13 @@ For each item, also suggest:
 Respond in JSON format:
 {
   "supplierName": "string or null",
+  "recipientName": "string or null",
+  "recipientAddress": "string or null",
   "invoiceNumber": "string or null",
   "invoiceDate": "YYYY-MM-DD or null",
   "totalAmount": number or null,
+  "potentialMismatch": boolean,
+  "mismatchReason": "string or null (explain why this might be the wrong venue, e.g., 'Invoice is addressed to Restaurant XYZ but uploaded to ${store?.name || 'this venue'}')",
   "items": [
     {
       "rawName": "string",
@@ -407,6 +470,10 @@ Respond in JSON format:
         totalAmount: extractedData.totalAmount,
         extractedData: JSON.stringify(extractedData),
         status: 'reviewed',
+        // Mismatch detection fields
+        potentialMismatch: extractedData.potentialMismatch || false,
+        detectedRecipient: extractedData.recipientName || null,
+        mismatchReason: extractedData.mismatchReason || null,
       },
     });
 

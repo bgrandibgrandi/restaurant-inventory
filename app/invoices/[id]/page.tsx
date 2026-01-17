@@ -37,6 +37,11 @@ type InvoiceItem = {
   status: string;
 };
 
+type Store = {
+  id: string;
+  name: string;
+};
+
 type Invoice = {
   id: string;
   fileName: string | null;
@@ -54,6 +59,11 @@ type Invoice = {
   createdAt: string;
   newSupplierDetected?: boolean;
   suggestedSupplierMatch?: Supplier | null;
+  // Mismatch detection fields
+  potentialMismatch?: boolean;
+  detectedRecipient?: string | null;
+  mismatchReason?: string | null;
+  mismatchDismissed?: boolean;
 };
 
 export default function InvoiceDetailPage() {
@@ -65,11 +75,14 @@ export default function InvoiceDetailPage() {
   const [categories, setCategories] = useState<Category[]>([]);
   const [existingItems, setExistingItems] = useState<Item[]>([]);
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
+  const [stores, setStores] = useState<Store[]>([]);
   const [loading, setLoading] = useState(true);
   const [extracting, setExtracting] = useState(false);
   const [confirming, setConfirming] = useState(false);
   const [editingItem, setEditingItem] = useState<string | null>(null);
   const [deleting, setDeleting] = useState(false);
+  const [showMismatchDialog, setShowMismatchDialog] = useState(false);
+  const [changingStore, setChangingStore] = useState(false);
   const [showSupplierDialog, setShowSupplierDialog] = useState(false);
   const [supplierDialogType, setSupplierDialogType] = useState<'new' | 'match' | null>(null);
   const [pendingSupplierName, setPendingSupplierName] = useState<string | null>(null);
@@ -106,11 +119,12 @@ export default function InvoiceDetailPage() {
 
   const fetchData = async () => {
     try {
-      const [invoiceRes, categoriesRes, itemsRes, suppliersRes] = await Promise.all([
+      const [invoiceRes, categoriesRes, itemsRes, suppliersRes, storesRes] = await Promise.all([
         fetch(`/api/invoices/${invoiceId}`),
         fetch('/api/categories'),
         fetch('/api/items'),
         fetch('/api/suppliers'),
+        fetch('/api/stores'),
       ]);
 
       if (!invoiceRes.ok) {
@@ -118,17 +132,24 @@ export default function InvoiceDetailPage() {
         return;
       }
 
-      const [invoiceData, categoriesData, itemsData, suppliersData] = await Promise.all([
+      const [invoiceData, categoriesData, itemsData, suppliersData, storesData] = await Promise.all([
         invoiceRes.json(),
         categoriesRes.json(),
         itemsRes.json(),
         suppliersRes.json(),
+        storesRes.json(),
       ]);
 
       setInvoice(invoiceData);
       setCategories(categoriesData);
       setExistingItems(itemsData);
       setSuppliers(suppliersData);
+      setStores(storesData);
+
+      // Check if we need to show mismatch warning
+      if (invoiceData.potentialMismatch && !invoiceData.mismatchDismissed) {
+        setShowMismatchDialog(true);
+      }
 
       // Check if we need to show supplier dialog after extraction
       if (invoiceData.newSupplierDetected && invoiceData.supplierName) {
@@ -160,6 +181,11 @@ export default function InvoiceDetailPage() {
       if (response.ok) {
         const updatedInvoice = await response.json();
         setInvoice(updatedInvoice);
+
+        // Check if there's a potential mismatch warning
+        if (updatedInvoice.potentialMismatch && !updatedInvoice.mismatchDismissed) {
+          setShowMismatchDialog(true);
+        }
 
         // Check if we need to show supplier confirmation dialog
         if (updatedInvoice.newSupplierDetected && updatedInvoice.supplierName) {
@@ -257,6 +283,45 @@ export default function InvoiceDetailPage() {
     setSupplierDialogType(null);
     setPendingSupplierName(null);
     setSuggestedSupplierMatch(null);
+  };
+
+  const handleDismissMismatch = async () => {
+    try {
+      await fetch(`/api/invoices/${invoiceId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'dismiss_mismatch' }),
+      });
+      setInvoice((prev) => prev ? { ...prev, mismatchDismissed: true } : null);
+    } catch (error) {
+      console.error('Error dismissing mismatch:', error);
+    }
+    setShowMismatchDialog(false);
+  };
+
+  const handleChangeStore = async (newStoreId: string) => {
+    setChangingStore(true);
+    try {
+      const response = await fetch(`/api/invoices/${invoiceId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'change_store', newStoreId }),
+      });
+
+      if (response.ok) {
+        const updatedInvoice = await response.json();
+        setInvoice(updatedInvoice);
+        setShowMismatchDialog(false);
+      } else {
+        const error = await response.json();
+        alert(`Failed to change store: ${error.error}`);
+      }
+    } catch (error) {
+      console.error('Error changing store:', error);
+      alert('Failed to change store');
+    } finally {
+      setChangingStore(false);
+    }
   };
 
   const handleCreateCategory = async (name: string): Promise<Category | null> => {
@@ -405,6 +470,71 @@ export default function InvoiceDetailPage() {
 
   return (
     <div className="min-h-screen bg-gray-50 pb-24">
+      {/* Mismatch Warning Dialog */}
+      {showMismatchDialog && invoice && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-xl max-w-md w-full p-6">
+            <div className="w-12 h-12 mx-auto bg-orange-100 rounded-full flex items-center justify-center mb-4">
+              <svg className="w-6 h-6 text-orange-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+              </svg>
+            </div>
+            <h3 className="text-lg font-semibold text-gray-900 text-center mb-2">
+              Possible Wrong Venue
+            </h3>
+            <p className="text-gray-600 text-center mb-4">
+              This invoice might have been uploaded to the wrong venue.
+            </p>
+
+            <div className="bg-orange-50 rounded-lg p-3 mb-4 space-y-2">
+              <div className="flex justify-between text-sm">
+                <span className="text-gray-500">Selected venue:</span>
+                <span className="font-medium text-gray-900">{invoice.store.name}</span>
+              </div>
+              {invoice.detectedRecipient && (
+                <div className="flex justify-between text-sm">
+                  <span className="text-gray-500">Detected on invoice:</span>
+                  <span className="font-medium text-orange-700">{invoice.detectedRecipient}</span>
+                </div>
+              )}
+            </div>
+
+            {invoice.mismatchReason && (
+              <p className="text-sm text-gray-600 mb-4 bg-gray-50 p-3 rounded-lg">
+                {invoice.mismatchReason}
+              </p>
+            )}
+
+            <div className="space-y-3">
+              <div className="text-sm text-gray-500 mb-2">Move to correct venue:</div>
+              <div className="grid grid-cols-2 gap-2">
+                {stores
+                  .filter((s) => s.id !== invoice.store.id)
+                  .map((store) => (
+                    <button
+                      key={store.id}
+                      onClick={() => handleChangeStore(store.id)}
+                      disabled={changingStore}
+                      className="py-2 px-3 bg-blue-50 hover:bg-blue-100 text-blue-700 font-medium rounded-lg transition text-sm disabled:opacity-50"
+                    >
+                      {changingStore ? '...' : store.name}
+                    </button>
+                  ))}
+              </div>
+
+              <div className="border-t border-gray-200 pt-3 mt-3">
+                <button
+                  onClick={handleDismissMismatch}
+                  className="w-full py-2 text-gray-600 hover:text-gray-800 font-medium"
+                >
+                  Ignore, this is correct
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Supplier Confirmation Dialog */}
       {showSupplierDialog && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
@@ -561,6 +691,31 @@ export default function InvoiceDetailPage() {
       </header>
 
       <main className="max-w-4xl mx-auto px-4 py-6">
+        {/* Mismatch Warning Banner */}
+        {invoice.potentialMismatch && !invoice.mismatchDismissed && (
+          <div className="bg-orange-50 border border-orange-200 rounded-xl p-4 mb-6">
+            <div className="flex items-start gap-3">
+              <div className="flex-shrink-0">
+                <svg className="w-5 h-5 text-orange-600 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                </svg>
+              </div>
+              <div className="flex-1">
+                <h4 className="text-sm font-medium text-orange-800">Possible wrong venue</h4>
+                <p className="text-sm text-orange-700 mt-1">
+                  {invoice.mismatchReason || `This invoice may belong to a different venue. Detected: ${invoice.detectedRecipient || 'Unknown'}`}
+                </p>
+              </div>
+              <button
+                onClick={() => setShowMismatchDialog(true)}
+                className="flex-shrink-0 px-3 py-1.5 bg-orange-600 hover:bg-orange-700 text-white text-sm font-medium rounded-lg transition"
+              >
+                Review
+              </button>
+            </div>
+          </div>
+        )}
+
         {/* Invoice Info */}
         <div className="bg-white rounded-xl border border-gray-100 p-4 mb-6">
           <div className="flex justify-between items-start mb-4">

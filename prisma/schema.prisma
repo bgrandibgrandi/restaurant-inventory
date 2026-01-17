@@ -210,6 +210,11 @@ model Invoice {
   extractedData           String?       // JSON of AI-extracted data
   items                   InvoiceItem[]
   notes                   String?
+  // Mismatch detection - flag when invoice might be uploaded to wrong store
+  potentialMismatch       Boolean       @default(false) // True if detected recipient doesn't match store
+  detectedRecipient       String?       // Business name detected on invoice (e.g., "Delivered to: Restaurant ABC")
+  mismatchReason          String?       // Explanation of why it might be wrong
+  mismatchDismissed       Boolean       @default(false) // User dismissed the warning
   createdAt               DateTime      @default(now())
   updatedAt               DateTime      @updatedAt
 }

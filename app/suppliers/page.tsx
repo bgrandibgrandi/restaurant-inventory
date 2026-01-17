@@ -32,6 +32,13 @@ export default function SuppliersPage() {
     notes: '',
   });
 
+  // Merge state
+  const [mergeMode, setMergeMode] = useState(false);
+  const [selectedForMerge, setSelectedForMerge] = useState<string[]>([]);
+  const [showMergeDialog, setShowMergeDialog] = useState(false);
+  const [targetSupplierId, setTargetSupplierId] = useState<string>('');
+  const [merging, setMerging] = useState(false);
+
   useEffect(() => {
     fetchSuppliers();
   }, []);
@@ -132,6 +139,69 @@ export default function SuppliersPage() {
     resetForm();
   };
 
+  const toggleMergeMode = () => {
+    setMergeMode(!mergeMode);
+    setSelectedForMerge([]);
+    setShowMergeDialog(false);
+  };
+
+  const toggleSupplierSelection = (id: string) => {
+    setSelectedForMerge((prev) =>
+      prev.includes(id) ? prev.filter((s) => s !== id) : [...prev, id]
+    );
+  };
+
+  const openMergeDialog = () => {
+    if (selectedForMerge.length < 2) {
+      alert('Please select at least 2 suppliers to merge');
+      return;
+    }
+    setTargetSupplierId(selectedForMerge[0]);
+    setShowMergeDialog(true);
+  };
+
+  const handleMerge = async () => {
+    if (!targetSupplierId) {
+      alert('Please select a target supplier');
+      return;
+    }
+
+    const sourceIds = selectedForMerge.filter((id) => id !== targetSupplierId);
+    if (sourceIds.length === 0) {
+      alert('Please select at least one supplier to merge into the target');
+      return;
+    }
+
+    setMerging(true);
+    try {
+      const response = await fetch('/api/suppliers/merge', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          targetSupplierId,
+          sourceSuppliersIds: sourceIds,
+        }),
+      });
+
+      if (response.ok) {
+        const result = await response.json();
+        alert(result.message);
+        await fetchSuppliers();
+        setMergeMode(false);
+        setSelectedForMerge([]);
+        setShowMergeDialog(false);
+      } else {
+        const error = await response.json();
+        alert(error.error || 'Failed to merge suppliers');
+      }
+    } catch (error) {
+      console.error('Error merging suppliers:', error);
+      alert('An error occurred');
+    } finally {
+      setMerging(false);
+    }
+  };
+
   if (loading) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
@@ -157,19 +227,38 @@ export default function SuppliersPage() {
               </Link>
               <h1 className="text-xl font-semibold text-gray-900">Suppliers</h1>
             </div>
-            <button
-              onClick={() => {
-                resetForm();
-                setEditingId(null);
-                setShowAddForm(true);
-              }}
-              className="inline-flex items-center px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium rounded-lg transition shadow-sm"
-            >
-              <svg className="w-5 h-5 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-              </svg>
-              Add Supplier
-            </button>
+            <div className="flex items-center gap-2">
+              {suppliers.length >= 2 && (
+                <button
+                  onClick={toggleMergeMode}
+                  className={`inline-flex items-center px-4 py-2 text-sm font-medium rounded-lg transition shadow-sm ${
+                    mergeMode
+                      ? 'bg-orange-600 hover:bg-orange-700 text-white'
+                      : 'bg-gray-100 hover:bg-gray-200 text-gray-700'
+                  }`}
+                >
+                  <svg className="w-5 h-5 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" />
+                  </svg>
+                  {mergeMode ? 'Cancel Merge' : 'Merge Duplicates'}
+                </button>
+              )}
+              {!mergeMode && (
+                <button
+                  onClick={() => {
+                    resetForm();
+                    setEditingId(null);
+                    setShowAddForm(true);
+                  }}
+                  className="inline-flex items-center px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium rounded-lg transition shadow-sm"
+                >
+                  <svg className="w-5 h-5 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                  </svg>
+                  Add Supplier
+                </button>
+              )}
+            </div>
           </div>
         </div>
       </header>
@@ -265,6 +354,35 @@ export default function SuppliersPage() {
           </div>
         )}
 
+        {/* Merge Mode Banner */}
+        {mergeMode && (
+          <div className="bg-orange-50 border border-orange-200 rounded-xl p-4 mb-6">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <svg className="w-5 h-5 text-orange-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+                <div>
+                  <p className="text-sm font-medium text-orange-800">
+                    Merge Mode: Select suppliers to merge
+                  </p>
+                  <p className="text-xs text-orange-600">
+                    {selectedForMerge.length} supplier{selectedForMerge.length !== 1 ? 's' : ''} selected
+                  </p>
+                </div>
+              </div>
+              {selectedForMerge.length >= 2 && (
+                <button
+                  onClick={openMergeDialog}
+                  className="px-4 py-2 bg-orange-600 hover:bg-orange-700 text-white text-sm font-medium rounded-lg transition"
+                >
+                  Merge Selected
+                </button>
+              )}
+            </div>
+          </div>
+        )}
+
         {/* Suppliers List */}
         <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
           <div className="px-6 py-4 border-b border-gray-100">
@@ -294,6 +412,11 @@ export default function SuppliersPage() {
               <table className="w-full">
                 <thead className="bg-gray-50 border-b border-gray-100">
                   <tr>
+                    {mergeMode && (
+                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-12">
+                        <span className="sr-only">Select</span>
+                      </th>
+                    )}
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                       Supplier
                     </th>
@@ -306,14 +429,39 @@ export default function SuppliersPage() {
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                       Invoices
                     </th>
-                    <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Actions
-                    </th>
+                    {!mergeMode && (
+                      <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Actions
+                      </th>
+                    )}
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100">
                   {suppliers.map((supplier) => (
-                    <tr key={supplier.id} className="hover:bg-gray-50 transition">
+                    <tr
+                      key={supplier.id}
+                      onClick={mergeMode ? () => toggleSupplierSelection(supplier.id) : undefined}
+                      className={`transition ${
+                        mergeMode
+                          ? `cursor-pointer ${
+                              selectedForMerge.includes(supplier.id)
+                                ? 'bg-orange-50'
+                                : 'hover:bg-gray-50'
+                            }`
+                          : 'hover:bg-gray-50'
+                      }`}
+                    >
+                      {mergeMode && (
+                        <td className="px-4 py-4">
+                          <input
+                            type="checkbox"
+                            checked={selectedForMerge.includes(supplier.id)}
+                            onChange={() => toggleSupplierSelection(supplier.id)}
+                            onClick={(e) => e.stopPropagation()}
+                            className="h-4 w-4 text-orange-600 border-gray-300 rounded focus:ring-orange-500"
+                          />
+                        </td>
+                      )}
                       <td className="px-6 py-4">
                         <div className="font-medium text-gray-900">{supplier.name}</div>
                         {supplier.address && (
@@ -341,22 +489,24 @@ export default function SuppliersPage() {
                           {supplier._count.invoices} invoices
                         </span>
                       </td>
-                      <td className="px-6 py-4 text-right">
-                        <div className="flex justify-end gap-2">
-                          <button
-                            onClick={() => handleEdit(supplier)}
-                            className="px-3 py-1 bg-gray-100 hover:bg-gray-200 text-gray-700 text-sm font-medium rounded transition"
-                          >
-                            Edit
-                          </button>
-                          <button
-                            onClick={() => setDeleteConfirm(supplier.id)}
-                            className="px-3 py-1 bg-red-100 hover:bg-red-200 text-red-700 text-sm font-medium rounded transition"
-                          >
-                            Delete
-                          </button>
-                        </div>
-                      </td>
+                      {!mergeMode && (
+                        <td className="px-6 py-4 text-right">
+                          <div className="flex justify-end gap-2">
+                            <button
+                              onClick={() => handleEdit(supplier)}
+                              className="px-3 py-1 bg-gray-100 hover:bg-gray-200 text-gray-700 text-sm font-medium rounded transition"
+                            >
+                              Edit
+                            </button>
+                            <button
+                              onClick={() => setDeleteConfirm(supplier.id)}
+                              className="px-3 py-1 bg-red-100 hover:bg-red-200 text-red-700 text-sm font-medium rounded transition"
+                            >
+                              Delete
+                            </button>
+                          </div>
+                        </td>
+                      )}
                     </tr>
                   ))}
                 </tbody>
@@ -388,6 +538,95 @@ export default function SuppliersPage() {
                 className="flex-1 px-4 py-2 bg-red-600 hover:bg-red-700 text-white font-medium rounded-lg transition"
               >
                 Delete
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Merge Dialog */}
+      {showMergeDialog && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-xl p-6 max-w-lg mx-4 w-full">
+            <div className="w-12 h-12 mx-auto bg-orange-100 rounded-full flex items-center justify-center mb-4">
+              <svg className="w-6 h-6 text-orange-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" />
+              </svg>
+            </div>
+            <h3 className="text-lg font-semibold text-gray-900 text-center mb-2">
+              Merge Suppliers
+            </h3>
+            <p className="text-gray-600 text-center mb-6">
+              Select which supplier to keep. All invoices and items from the other suppliers will be moved to this supplier.
+            </p>
+
+            <div className="space-y-2 mb-6">
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Keep this supplier:
+              </label>
+              {selectedForMerge.map((id) => {
+                const supplier = suppliers.find((s) => s.id === id);
+                if (!supplier) return null;
+                return (
+                  <label
+                    key={id}
+                    className={`flex items-center gap-3 p-3 rounded-lg border cursor-pointer transition ${
+                      targetSupplierId === id
+                        ? 'border-orange-500 bg-orange-50'
+                        : 'border-gray-200 hover:bg-gray-50'
+                    }`}
+                  >
+                    <input
+                      type="radio"
+                      name="targetSupplier"
+                      value={id}
+                      checked={targetSupplierId === id}
+                      onChange={() => setTargetSupplierId(id)}
+                      className="h-4 w-4 text-orange-600 border-gray-300 focus:ring-orange-500"
+                    />
+                    <div className="flex-1">
+                      <div className="font-medium text-gray-900">{supplier.name}</div>
+                      <div className="text-xs text-gray-500">
+                        {supplier._count.items} items, {supplier._count.invoices} invoices
+                      </div>
+                    </div>
+                    {targetSupplierId === id && (
+                      <span className="text-xs px-2 py-0.5 bg-green-100 text-green-700 rounded-full font-medium">
+                        Keep
+                      </span>
+                    )}
+                    {targetSupplierId !== id && (
+                      <span className="text-xs px-2 py-0.5 bg-red-100 text-red-700 rounded-full font-medium">
+                        Delete
+                      </span>
+                    )}
+                  </label>
+                );
+              })}
+            </div>
+
+            <div className="bg-gray-50 rounded-lg p-3 mb-6">
+              <p className="text-sm text-gray-600">
+                <strong>Summary:</strong> Merge {selectedForMerge.length - 1} supplier
+                {selectedForMerge.length - 1 !== 1 ? 's' : ''} into &quot;
+                {suppliers.find((s) => s.id === targetSupplierId)?.name}&quot;
+              </p>
+            </div>
+
+            <div className="flex gap-3">
+              <button
+                onClick={() => setShowMergeDialog(false)}
+                className="flex-1 px-4 py-2 bg-gray-200 hover:bg-gray-300 text-gray-700 font-medium rounded-lg transition"
+                disabled={merging}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleMerge}
+                disabled={merging}
+                className="flex-1 px-4 py-2 bg-orange-600 hover:bg-orange-700 text-white font-medium rounded-lg transition disabled:opacity-50"
+              >
+                {merging ? 'Merging...' : 'Merge Suppliers'}
               </button>
             </div>
           </div>
