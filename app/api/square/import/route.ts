@@ -29,6 +29,7 @@ export async function POST(request: NextRequest) {
     const accountId = session.user.accountId;
     let recipesCreated = 0;
     let itemsCreated = 0;
+    let skippedDuplicates = 0;
 
     // Get all catalog items in one query
     const catalogItemIds = items.map((i) => i.catalogItemId);
@@ -44,6 +45,18 @@ export async function POST(request: NextRequest) {
 
     // Create a map for quick lookup
     const catalogMap = new Map(catalogItems.map((c) => [c.id, c]));
+
+    // Get existing item and recipe names to avoid duplicates
+    const existingItems = await prisma.item.findMany({
+      where: { accountId },
+      select: { name: true },
+    });
+    const existingRecipes = await prisma.recipe.findMany({
+      where: { accountId },
+      select: { name: true },
+    });
+    const existingItemNames = new Set(existingItems.map((i) => i.name.toLowerCase()));
+    const existingRecipeNames = new Set(existingRecipes.map((r) => r.name.toLowerCase()));
 
     // Get or create categories based on Square category names
     const squareCategoryNames = new Set<string>();
@@ -88,6 +101,11 @@ export async function POST(request: NextRequest) {
       const priceInCents = firstVariation?.priceMoney;
 
       if (importItem.importAs === 'recipe') {
+        // Check for duplicate recipe
+        if (existingRecipeNames.has(catalogItem.name.toLowerCase())) {
+          skippedDuplicates++;
+          continue;
+        }
         // Create Recipe
         await prisma.recipe.create({
           data: {
@@ -101,8 +119,14 @@ export async function POST(request: NextRequest) {
             isActive: true,
           },
         });
+        existingRecipeNames.add(catalogItem.name.toLowerCase());
         recipesCreated++;
       } else if (importItem.importAs === 'item') {
+        // Check for duplicate item
+        if (existingItemNames.has(catalogItem.name.toLowerCase())) {
+          skippedDuplicates++;
+          continue;
+        }
         // Create Inventory Item
         await prisma.item.create({
           data: {
@@ -115,6 +139,7 @@ export async function POST(request: NextRequest) {
             sku: firstVariation?.sku,
           },
         });
+        existingItemNames.add(catalogItem.name.toLowerCase());
         itemsCreated++;
       }
     }
@@ -122,6 +147,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({
       recipes: recipesCreated,
       items: itemsCreated,
+      skipped: skippedDuplicates,
     });
   } catch (error) {
     console.error('Error importing Square items:', error);
