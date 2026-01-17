@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
+import GoogleDrivePicker from '@/components/GoogleDrivePicker';
 
 type Store = {
   id: string;
@@ -31,6 +32,7 @@ export default function InvoicesPage() {
   const [uploading, setUploading] = useState(false);
   const [selectedStore, setSelectedStore] = useState('');
   const [dragActive, setDragActive] = useState(false);
+  const [driveAccessToken, setDriveAccessToken] = useState<string | null>(null);
 
   useEffect(() => {
     fetchData();
@@ -133,6 +135,52 @@ export default function InvoicesPage() {
     } finally {
       setUploading(false);
     }
+  };
+
+  const handleGoogleDriveFile = async (file: { id: string; name: string; mimeType: string }) => {
+    if (!selectedStore) {
+      alert('Please select a venue first');
+      return;
+    }
+
+    // Get the access token from the Google picker
+    const tokenClient = (window as any).google?.accounts?.oauth2?.initTokenClient({
+      client_id: process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID || '',
+      scope: 'https://www.googleapis.com/auth/drive.readonly',
+      callback: async (response: any) => {
+        if (response.access_token) {
+          setUploading(true);
+          try {
+            const apiResponse = await fetch('/api/invoices/google-drive', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                fileId: file.id,
+                fileName: file.name,
+                mimeType: file.mimeType,
+                accessToken: response.access_token,
+                storeId: selectedStore,
+              }),
+            });
+
+            if (apiResponse.ok) {
+              const invoice = await apiResponse.json();
+              router.push(`/invoices/${invoice.id}`);
+            } else {
+              const error = await apiResponse.json();
+              alert(`Import failed: ${error.error}`);
+            }
+          } catch (error) {
+            console.error('Google Drive import error:', error);
+            alert('Import failed');
+          } finally {
+            setUploading(false);
+          }
+        }
+      },
+    });
+
+    tokenClient?.requestAccessToken({ prompt: '' });
   };
 
   const getStatusBadge = (status: string) => {
@@ -239,7 +287,23 @@ export default function InvoicesPage() {
             </div>
           </div>
 
-          <p className="text-xs text-gray-500 mt-3 text-center">
+          {/* Divider */}
+          <div className="relative my-6">
+            <div className="absolute inset-0 flex items-center">
+              <div className="w-full border-t border-gray-200"></div>
+            </div>
+            <div className="relative flex justify-center text-sm">
+              <span className="px-3 bg-white text-gray-500">or</span>
+            </div>
+          </div>
+
+          {/* Google Drive Picker */}
+          <GoogleDrivePicker
+            onFilePicked={handleGoogleDriveFile}
+            disabled={uploading || !selectedStore}
+          />
+
+          <p className="text-xs text-gray-500 mt-4 text-center">
             AI will extract items, quantities, and prices from your invoice
           </p>
         </div>
