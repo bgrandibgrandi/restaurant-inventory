@@ -538,6 +538,13 @@ async function handleConfirmation(invoiceId: string, invoice: any, accountId: st
         },
       });
     } else if (itemId) {
+      // Update existing item's cost price if invoice has unit price
+      if (item.unitPrice) {
+        await prisma.item.update({
+          where: { id: itemId },
+          data: { costPrice: item.unitPrice },
+        });
+      }
       // Mark as confirmed
       await prisma.invoiceItem.update({
         where: { id: item.id },

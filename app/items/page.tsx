@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import Link from 'next/link';
 
 interface Category {
@@ -27,15 +27,26 @@ interface Item {
   createdAt: string;
 }
 
+type EditingField = 'name' | 'category' | 'supplier' | 'unit' | 'cost' | null;
+
 export default function ItemsPage() {
   const [items, setItems] = useState<Item[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
   const [loading, setLoading] = useState(true);
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
-  const [editingId, setEditingId] = useState<string | null>(null);
-  const [editData, setEditData] = useState<Partial<Item>>({});
+
+  // Double-click editing state
+  const [editingItemId, setEditingItemId] = useState<string | null>(null);
+  const [editingField, setEditingField] = useState<EditingField>(null);
+  const [editValue, setEditValue] = useState<string>('');
   const [saving, setSaving] = useState(false);
+  const inputRef = useRef<HTMLInputElement | HTMLSelectElement>(null);
+
+  // New category creation
+  const [showNewCategory, setShowNewCategory] = useState(false);
+  const [newCategoryName, setNewCategoryName] = useState('');
+  const [creatingCategory, setCreatingCategory] = useState(false);
 
   // Filter states
   const [searchQuery, setSearchQuery] = useState('');
@@ -46,6 +57,16 @@ export default function ItemsPage() {
   useEffect(() => {
     fetchData();
   }, []);
+
+  useEffect(() => {
+    // Focus input when editing starts
+    if (editingItemId && editingField && inputRef.current) {
+      inputRef.current.focus();
+      if (inputRef.current instanceof HTMLInputElement) {
+        inputRef.current.select();
+      }
+    }
+  }, [editingItemId, editingField]);
 
   const fetchData = async () => {
     try {
@@ -113,37 +134,72 @@ export default function ItemsPage() {
     }
   };
 
-  const startEditing = (item: Item) => {
-    setEditingId(item.id);
-    setEditData({
-      name: item.name,
-      categoryId: item.categoryId,
-      supplierId: item.supplierId,
-      unit: item.unit,
-    });
+  const startEditing = (item: Item, field: EditingField) => {
+    setEditingItemId(item.id);
+    setEditingField(field);
+
+    switch (field) {
+      case 'name':
+        setEditValue(item.name);
+        break;
+      case 'category':
+        setEditValue(item.categoryId || '');
+        break;
+      case 'supplier':
+        setEditValue(item.supplierId || '');
+        break;
+      case 'unit':
+        setEditValue(item.unit);
+        break;
+      case 'cost':
+        setEditValue(item.costPrice?.toString() || '');
+        break;
+    }
   };
 
   const cancelEditing = () => {
-    setEditingId(null);
-    setEditData({});
+    setEditingItemId(null);
+    setEditingField(null);
+    setEditValue('');
+    setShowNewCategory(false);
+    setNewCategoryName('');
   };
 
   const saveEditing = async () => {
-    if (!editingId) return;
+    if (!editingItemId || !editingField) return;
 
     setSaving(true);
     try {
-      const response = await fetch(`/api/items/${editingId}`, {
+      const updateData: Record<string, unknown> = {};
+
+      switch (editingField) {
+        case 'name':
+          updateData.name = editValue;
+          break;
+        case 'category':
+          updateData.categoryId = editValue || null;
+          break;
+        case 'supplier':
+          updateData.supplierId = editValue || null;
+          break;
+        case 'unit':
+          updateData.unit = editValue;
+          break;
+        case 'cost':
+          updateData.costPrice = editValue ? parseFloat(editValue) : null;
+          break;
+      }
+
+      const response = await fetch(`/api/items/${editingItemId}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(editData),
+        body: JSON.stringify(updateData),
       });
 
       if (response.ok) {
         const updatedItem = await response.json();
-        setItems(items.map((item) => (item.id === editingId ? updatedItem : item)));
-        setEditingId(null);
-        setEditData({});
+        setItems(items.map((item) => (item.id === editingItemId ? updatedItem : item)));
+        cancelEditing();
       } else {
         alert('Failed to update item');
       }
@@ -155,6 +211,43 @@ export default function ItemsPage() {
     }
   };
 
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      saveEditing();
+    } else if (e.key === 'Escape') {
+      cancelEditing();
+    }
+  };
+
+  const createNewCategory = async () => {
+    if (!newCategoryName.trim()) return;
+
+    setCreatingCategory(true);
+    try {
+      const response = await fetch('/api/categories', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: newCategoryName.trim() }),
+      });
+
+      if (response.ok) {
+        const newCategory = await response.json();
+        setCategories([...categories, newCategory]);
+        setEditValue(newCategory.id);
+        setShowNewCategory(false);
+        setNewCategoryName('');
+      } else {
+        alert('Failed to create category');
+      }
+    } catch (error) {
+      console.error('Error creating category:', error);
+      alert('An error occurred');
+    } finally {
+      setCreatingCategory(false);
+    }
+  };
+
   const clearFilters = () => {
     setSearchQuery('');
     setFilterCategory('');
@@ -163,6 +256,178 @@ export default function ItemsPage() {
   };
 
   const hasFilters = searchQuery || filterCategory || filterSupplier || filterUnit;
+
+  const renderEditableCell = (
+    item: Item,
+    field: EditingField,
+    content: React.ReactNode,
+    className?: string
+  ) => {
+    const isEditing = editingItemId === item.id && editingField === field;
+
+    if (isEditing) {
+      return renderEditInput(item, field);
+    }
+
+    return (
+      <div
+        onDoubleClick={() => startEditing(item, field)}
+        className={`cursor-pointer hover:bg-gray-100 rounded px-1 py-0.5 -mx-1 transition ${className || ''}`}
+        title="Double-click to edit"
+      >
+        {content}
+      </div>
+    );
+  };
+
+  const renderEditInput = (item: Item, field: EditingField) => {
+    switch (field) {
+      case 'name':
+        return (
+          <input
+            ref={inputRef as React.RefObject<HTMLInputElement>}
+            type="text"
+            value={editValue}
+            onChange={(e) => setEditValue(e.target.value)}
+            onKeyDown={handleKeyDown}
+            onBlur={saveEditing}
+            disabled={saving}
+            className="w-full px-2 py-1 border border-blue-400 rounded text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none"
+          />
+        );
+
+      case 'category':
+        return (
+          <div className="space-y-1">
+            <select
+              ref={inputRef as React.RefObject<HTMLSelectElement>}
+              value={editValue}
+              onChange={(e) => {
+                if (e.target.value === '__new__') {
+                  setShowNewCategory(true);
+                } else {
+                  setEditValue(e.target.value);
+                }
+              }}
+              onKeyDown={handleKeyDown}
+              onBlur={() => !showNewCategory && saveEditing()}
+              disabled={saving}
+              className="w-full px-2 py-1 border border-blue-400 rounded text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none"
+            >
+              <option value="">No Category</option>
+              {categories.map((cat) => (
+                <option key={cat.id} value={cat.id}>
+                  {cat.name}
+                </option>
+              ))}
+              <option value="__new__">+ Add New Category</option>
+            </select>
+            {showNewCategory && (
+              <div className="flex gap-1">
+                <input
+                  type="text"
+                  value={newCategoryName}
+                  onChange={(e) => setNewCategoryName(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      e.preventDefault();
+                      createNewCategory();
+                    } else if (e.key === 'Escape') {
+                      setShowNewCategory(false);
+                      setNewCategoryName('');
+                    }
+                  }}
+                  placeholder="Category name..."
+                  autoFocus
+                  className="flex-1 px-2 py-1 border border-gray-300 rounded text-sm"
+                />
+                <button
+                  onClick={createNewCategory}
+                  disabled={creatingCategory || !newCategoryName.trim()}
+                  className="px-2 py-1 bg-green-600 text-white rounded text-xs disabled:opacity-50"
+                >
+                  {creatingCategory ? '...' : 'Add'}
+                </button>
+                <button
+                  onClick={() => {
+                    setShowNewCategory(false);
+                    setNewCategoryName('');
+                  }}
+                  className="px-2 py-1 bg-gray-200 text-gray-700 rounded text-xs"
+                >
+                  Cancel
+                </button>
+              </div>
+            )}
+          </div>
+        );
+
+      case 'supplier':
+        return (
+          <select
+            ref={inputRef as React.RefObject<HTMLSelectElement>}
+            value={editValue}
+            onChange={(e) => setEditValue(e.target.value)}
+            onKeyDown={handleKeyDown}
+            onBlur={saveEditing}
+            disabled={saving}
+            className="w-full px-2 py-1 border border-blue-400 rounded text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none"
+          >
+            <option value="">No Supplier</option>
+            {suppliers.map((sup) => (
+              <option key={sup.id} value={sup.id}>
+                {sup.name}
+              </option>
+            ))}
+          </select>
+        );
+
+      case 'unit':
+        return (
+          <select
+            ref={inputRef as React.RefObject<HTMLSelectElement>}
+            value={editValue}
+            onChange={(e) => setEditValue(e.target.value)}
+            onKeyDown={handleKeyDown}
+            onBlur={saveEditing}
+            disabled={saving}
+            className="w-24 px-2 py-1 border border-blue-400 rounded text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none"
+          >
+            <option value="kg">kg</option>
+            <option value="g">g</option>
+            <option value="L">L</option>
+            <option value="mL">mL</option>
+            <option value="pieces">pieces</option>
+            <option value="boxes">boxes</option>
+            <option value="cases">cases</option>
+            <option value="bottles">bottles</option>
+            <option value="cans">cans</option>
+            <option value="packs">packs</option>
+          </select>
+        );
+
+      case 'cost':
+        return (
+          <div className="flex items-center gap-1">
+            <span className="text-gray-500">€</span>
+            <input
+              ref={inputRef as React.RefObject<HTMLInputElement>}
+              type="number"
+              step="0.01"
+              value={editValue}
+              onChange={(e) => setEditValue(e.target.value)}
+              onKeyDown={handleKeyDown}
+              onBlur={saveEditing}
+              disabled={saving}
+              className="w-20 px-2 py-1 border border-blue-400 rounded text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none"
+            />
+          </div>
+        );
+
+      default:
+        return null;
+    }
+  };
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -192,6 +457,11 @@ export default function ItemsPage() {
       </header>
 
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+        {/* Info banner */}
+        <div className="bg-blue-50 border border-blue-200 rounded-lg px-4 py-3 mb-6 text-sm text-blue-700">
+          <strong>Tip:</strong> Double-click any cell to edit it directly. Press Enter to save or Escape to cancel.
+        </div>
+
         {/* Filters */}
         <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-4 mb-6">
           <div className="flex flex-wrap gap-4 items-end">
@@ -332,166 +602,95 @@ export default function ItemsPage() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100">
-                  {filteredItems.map((item) => {
-                    const isEditing = editingId === item.id;
+                  {filteredItems.map((item) => (
+                    <tr key={item.id} className="hover:bg-gray-50 transition">
+                      {/* Name */}
+                      <td className="px-4 py-3">
+                        {renderEditableCell(
+                          item,
+                          'name',
+                          <div>
+                            <div className="text-sm font-medium text-gray-900">{item.name}</div>
+                            {item.sku && (
+                              <div className="text-xs text-gray-400">SKU: {item.sku}</div>
+                            )}
+                          </div>
+                        )}
+                      </td>
 
-                    return (
-                      <tr
-                        key={item.id}
-                        className={isEditing ? 'bg-blue-50' : 'hover:bg-gray-50 transition'}
-                      >
-                        {/* Name */}
-                        <td className="px-4 py-3">
-                          {isEditing ? (
-                            <input
-                              type="text"
-                              value={editData.name || ''}
-                              onChange={(e) => setEditData({ ...editData, name: e.target.value })}
-                              className="w-full px-2 py-1 border border-blue-300 rounded text-sm focus:ring-2 focus:ring-blue-500"
-                            />
-                          ) : (
-                            <div>
-                              <div className="text-sm font-medium text-gray-900">{item.name}</div>
-                              {item.sku && (
-                                <div className="text-xs text-gray-400">SKU: {item.sku}</div>
-                              )}
-                            </div>
-                          )}
-                        </td>
+                      {/* Category */}
+                      <td className="px-4 py-3">
+                        {renderEditableCell(
+                          item,
+                          'category',
+                          <span
+                            className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${
+                              item.category
+                                ? 'bg-blue-100 text-blue-800'
+                                : 'bg-gray-100 text-gray-500'
+                            }`}
+                          >
+                            {item.category?.name || 'None'}
+                          </span>
+                        )}
+                      </td>
 
-                        {/* Category */}
-                        <td className="px-4 py-3">
-                          {isEditing ? (
-                            <select
-                              value={editData.categoryId || ''}
-                              onChange={(e) =>
-                                setEditData({ ...editData, categoryId: e.target.value || null })
-                              }
-                              className="w-full px-2 py-1 border border-blue-300 rounded text-sm focus:ring-2 focus:ring-blue-500"
-                            >
-                              <option value="">No Category</option>
-                              {categories.map((cat) => (
-                                <option key={cat.id} value={cat.id}>
-                                  {cat.name}
-                                </option>
-                              ))}
-                            </select>
-                          ) : (
-                            <span
-                              className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${
-                                item.category
-                                  ? 'bg-blue-100 text-blue-800'
-                                  : 'bg-gray-100 text-gray-500'
-                              }`}
-                            >
-                              {item.category?.name || 'None'}
-                            </span>
-                          )}
-                        </td>
+                      {/* Supplier */}
+                      <td className="px-4 py-3">
+                        {renderEditableCell(
+                          item,
+                          'supplier',
+                          <span
+                            className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${
+                              item.supplier
+                                ? 'bg-purple-100 text-purple-800'
+                                : 'bg-gray-100 text-gray-500'
+                            }`}
+                          >
+                            {item.supplier?.name || 'None'}
+                          </span>
+                        )}
+                      </td>
 
-                        {/* Supplier */}
-                        <td className="px-4 py-3">
-                          {isEditing ? (
-                            <select
-                              value={editData.supplierId || ''}
-                              onChange={(e) =>
-                                setEditData({ ...editData, supplierId: e.target.value || null })
-                              }
-                              className="w-full px-2 py-1 border border-blue-300 rounded text-sm focus:ring-2 focus:ring-blue-500"
-                            >
-                              <option value="">No Supplier</option>
-                              {suppliers.map((sup) => (
-                                <option key={sup.id} value={sup.id}>
-                                  {sup.name}
-                                </option>
-                              ))}
-                            </select>
-                          ) : (
-                            <span
-                              className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${
-                                item.supplier
-                                  ? 'bg-purple-100 text-purple-800'
-                                  : 'bg-gray-100 text-gray-500'
-                              }`}
-                            >
-                              {item.supplier?.name || 'None'}
-                            </span>
-                          )}
-                        </td>
+                      {/* Unit */}
+                      <td className="px-4 py-3">
+                        {renderEditableCell(
+                          item,
+                          'unit',
+                          <span className="text-sm text-gray-600">{item.unit}</span>
+                        )}
+                      </td>
 
-                        {/* Unit */}
-                        <td className="px-4 py-3">
-                          {isEditing ? (
-                            <select
-                              value={editData.unit || ''}
-                              onChange={(e) => setEditData({ ...editData, unit: e.target.value })}
-                              className="w-24 px-2 py-1 border border-blue-300 rounded text-sm focus:ring-2 focus:ring-blue-500"
-                            >
-                              <option value="kg">kg</option>
-                              <option value="g">g</option>
-                              <option value="L">L</option>
-                              <option value="mL">mL</option>
-                              <option value="pieces">pieces</option>
-                              <option value="boxes">boxes</option>
-                              <option value="cases">cases</option>
-                              <option value="bottles">bottles</option>
-                              <option value="cans">cans</option>
-                              <option value="packs">packs</option>
-                            </select>
-                          ) : (
-                            <span className="text-sm text-gray-600">{item.unit}</span>
-                          )}
-                        </td>
+                      {/* Cost */}
+                      <td className="px-4 py-3">
+                        {renderEditableCell(
+                          item,
+                          'cost',
+                          <span className="text-sm text-gray-600">
+                            {item.costPrice ? `€${item.costPrice.toFixed(2)}` : '-'}
+                          </span>
+                        )}
+                      </td>
 
-                        {/* Cost */}
-                        <td className="px-4 py-3 text-sm text-gray-600">
-                          {item.costPrice ? `€${item.costPrice.toFixed(2)}` : '-'}
-                        </td>
-
-                        {/* Actions */}
-                        <td className="px-4 py-3 text-right">
-                          {isEditing ? (
-                            <div className="flex justify-end gap-2">
-                              <button
-                                onClick={saveEditing}
-                                disabled={saving}
-                                className="px-3 py-1 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium rounded transition disabled:opacity-50"
-                              >
-                                {saving ? 'Saving...' : 'Save'}
-                              </button>
-                              <button
-                                onClick={cancelEditing}
-                                className="px-3 py-1 bg-gray-200 hover:bg-gray-300 text-gray-700 text-sm font-medium rounded transition"
-                              >
-                                Cancel
-                              </button>
-                            </div>
-                          ) : (
-                            <div className="flex justify-end gap-2">
-                              <button
-                                onClick={() => startEditing(item)}
-                                className="px-3 py-1 bg-gray-100 hover:bg-gray-200 text-gray-700 text-sm font-medium rounded transition"
-                              >
-                                Edit
-                              </button>
-                              <Link
-                                href={`/items/${item.id}/edit`}
-                                className="px-3 py-1 bg-gray-100 hover:bg-gray-200 text-gray-700 text-sm font-medium rounded transition"
-                              >
-                                Full Edit
-                              </Link>
-                              <button
-                                onClick={() => setDeleteConfirm(item.id)}
-                                className="px-3 py-1 bg-red-100 hover:bg-red-200 text-red-700 text-sm font-medium rounded transition"
-                              >
-                                Delete
-                              </button>
-                            </div>
-                          )}
-                        </td>
-                      </tr>
-                    );
-                  })}
+                      {/* Actions */}
+                      <td className="px-4 py-3 text-right">
+                        <div className="flex justify-end gap-2">
+                          <Link
+                            href={`/items/${item.id}/edit`}
+                            className="px-3 py-1 bg-gray-100 hover:bg-gray-200 text-gray-700 text-sm font-medium rounded transition"
+                          >
+                            Full Edit
+                          </Link>
+                          <button
+                            onClick={() => setDeleteConfirm(item.id)}
+                            className="px-3 py-1 bg-red-100 hover:bg-red-200 text-red-700 text-sm font-medium rounded transition"
+                          >
+                            Delete
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
                 </tbody>
               </table>
             </div>
