@@ -32,6 +32,7 @@ export default function InvoicesPage() {
   const [uploading, setUploading] = useState(false);
   const [selectedStore, setSelectedStore] = useState('');
   const [dragActive, setDragActive] = useState(false);
+  const [driveAccessToken, setDriveAccessToken] = useState<string | null>(null);
 
   useEffect(() => {
     fetchData();
@@ -142,33 +143,44 @@ export default function InvoicesPage() {
       return;
     }
 
-    setUploading(true);
-    try {
-      // Import using public link - no OAuth needed if file is shared publicly
-      const apiResponse = await fetch('/api/invoices/google-drive', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          fileId: file.id,
-          fileName: file.name,
-          mimeType: file.mimeType,
-          storeId: selectedStore,
-        }),
-      });
+    // Get the access token from the Google picker
+    const tokenClient = (window as any).google?.accounts?.oauth2?.initTokenClient({
+      client_id: process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID || '',
+      scope: 'https://www.googleapis.com/auth/drive.readonly',
+      callback: async (response: any) => {
+        if (response.access_token) {
+          setUploading(true);
+          try {
+            const apiResponse = await fetch('/api/invoices/google-drive', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                fileId: file.id,
+                fileName: file.name,
+                mimeType: file.mimeType,
+                accessToken: response.access_token,
+                storeId: selectedStore,
+              }),
+            });
 
-      if (apiResponse.ok) {
-        const invoice = await apiResponse.json();
-        router.push(`/invoices/${invoice.id}`);
-      } else {
-        const error = await apiResponse.json();
-        alert(`Import failed: ${error.error}`);
-      }
-    } catch (error) {
-      console.error('Google Drive import error:', error);
-      alert('Import failed');
-    } finally {
-      setUploading(false);
-    }
+            if (apiResponse.ok) {
+              const invoice = await apiResponse.json();
+              router.push(`/invoices/${invoice.id}`);
+            } else {
+              const error = await apiResponse.json();
+              alert(`Import failed: ${error.error}`);
+            }
+          } catch (error) {
+            console.error('Google Drive import error:', error);
+            alert('Import failed');
+          } finally {
+            setUploading(false);
+          }
+        }
+      },
+    });
+
+    tokenClient?.requestAccessToken({ prompt: '' });
   };
 
   const getStatusBadge = (status: string) => {
