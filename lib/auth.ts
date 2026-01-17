@@ -38,6 +38,7 @@ export const authOptions: NextAuthOptions = {
               image: user.image,
               accountId: newAccount.id,
             },
+            include: { account: true },
           });
         }
 
