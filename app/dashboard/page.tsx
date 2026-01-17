@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
+import { signOut, useSession } from 'next-auth/react';
 import { LogoWithText } from '@/components/Logo';
 
 type StockEntry = {
@@ -25,9 +26,9 @@ type StockEntry = {
 };
 
 export default function Dashboard() {
+  const { data: session } = useSession();
   const [stock, setStock] = useState<StockEntry[]>([]);
   const [loading, setLoading] = useState(true);
-  const [userName, setUserName] = useState('');
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editValues, setEditValues] = useState<{
     quantity: string;
@@ -37,8 +38,6 @@ export default function Dashboard() {
   }>({ quantity: '', unitCost: '', currency: 'EUR', notes: '' });
 
   useEffect(() => {
-    const name = typeof window !== 'undefined' ? localStorage.getItem('userName') || 'there' : 'there';
-    setUserName(name);
     fetchStock();
   }, []);
 
@@ -152,6 +151,30 @@ export default function Dashboard() {
                 </svg>
                 Add Stock
               </Link>
+              {session?.user && (
+                <div className="flex items-center gap-3">
+                  <span className="text-sm text-gray-600">{session.user.email}</span>
+                  <button
+                    onClick={() => signOut({ callbackUrl: '/' })}
+                    className="inline-flex items-center px-3 py-2 text-sm font-medium text-gray-700 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition"
+                  >
+                    <svg
+                      className="w-4 h-4 mr-1.5"
+                      fill="none"
+                      stroke="currentColor"
+                      viewBox="0 0 24 24"
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={2}
+                        d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"
+                      />
+                    </svg>
+                    Sign out
+                  </button>
+                </div>
+              )}
             </div>
           </div>
         </div>
@@ -162,7 +185,7 @@ export default function Dashboard() {
         {/* Welcome Header */}
         <div className="mb-8">
           <h1 className="text-3xl font-bold text-gray-900 mb-2">
-            Welcome back, {userName}!
+            Welcome back, {session?.user?.name?.split(' ')[0] || 'there'}!
           </h1>
           <p className="text-gray-600">
             Here's what's happening in your inventory today

@@ -14,23 +14,30 @@ export const authOptions: NextAuthOptions = {
       if (!user.email) return false;
 
       try {
-        // Check if user exists
+        // Check if user exists (either they signed up before or were invited)
         let dbUser = await prisma.user.findUnique({
           where: { email: user.email },
           include: { account: true },
         });
 
-        // If user doesn't exist, create account and user
-        if (!dbUser) {
-          // Create account first
+        if (dbUser) {
+          // User exists - update their profile info from Google if needed
+          await prisma.user.update({
+            where: { id: dbUser.id },
+            data: {
+              name: user.name || dbUser.name,
+              image: user.image || dbUser.image,
+            },
+          });
+        } else {
+          // New user - create account and user
           const newAccount = await prisma.account.create({
             data: {
-              name: user.name || 'My Restaurant',
+              name: user.name ? `${user.name}'s Restaurant` : 'My Restaurant',
               baseCurrency: 'EUR',
             },
           });
 
-          // Create user
           dbUser = await prisma.user.create({
             data: {
               email: user.email,
