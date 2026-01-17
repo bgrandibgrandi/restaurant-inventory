@@ -64,33 +64,24 @@ export async function PUT(
     }
 
     const body = await request.json();
-    const {
-      name,
-      description,
-      unit,
-      categoryId,
-      supplierId,
-      sku,
-      barcode,
-      minStockLevel,
-      maxStockLevel,
-      costPrice,
-    } = body;
+
+    // Build update data object with only the fields that were provided
+    const updateData: Record<string, unknown> = {};
+
+    if ('name' in body) updateData.name = body.name;
+    if ('description' in body) updateData.description = body.description || null;
+    if ('unit' in body) updateData.unit = body.unit;
+    if ('categoryId' in body) updateData.categoryId = body.categoryId || null;
+    if ('supplierId' in body) updateData.supplierId = body.supplierId || null;
+    if ('sku' in body) updateData.sku = body.sku || null;
+    if ('barcode' in body) updateData.barcode = body.barcode || null;
+    if ('minStockLevel' in body) updateData.minStockLevel = body.minStockLevel;
+    if ('maxStockLevel' in body) updateData.maxStockLevel = body.maxStockLevel;
+    if ('costPrice' in body) updateData.costPrice = body.costPrice;
 
     const item = await prisma.item.update({
       where: { id },
-      data: {
-        name,
-        description: description || null,
-        unit,
-        categoryId: categoryId || null,
-        supplierId: supplierId || null,
-        sku: sku || null,
-        barcode: barcode || null,
-        minStockLevel: minStockLevel !== undefined ? minStockLevel : undefined,
-        maxStockLevel: maxStockLevel !== undefined ? maxStockLevel : undefined,
-        costPrice: costPrice !== undefined ? costPrice : undefined,
-      },
+      data: updateData,
       include: {
         category: true,
         supplier: true,

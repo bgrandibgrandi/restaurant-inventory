@@ -45,7 +45,10 @@ export default function EditItem() {
       const response = await fetch('/api/categories');
       if (response.ok) {
         const data = await response.json();
-        setCategories(data);
+        console.log('Categories loaded:', data);
+        setCategories(Array.isArray(data) ? data : []);
+      } else {
+        console.error('Categories fetch failed:', response.status);
       }
     } catch (error) {
       console.error('Error fetching categories:', error);
@@ -57,7 +60,10 @@ export default function EditItem() {
       const response = await fetch('/api/suppliers');
       if (response.ok) {
         const data = await response.json();
-        setSuppliers(data);
+        console.log('Suppliers loaded:', data);
+        setSuppliers(Array.isArray(data) ? data : []);
+      } else {
+        console.error('Suppliers fetch failed:', response.status);
       }
     } catch (error) {
       console.error('Error fetching suppliers:', error);
