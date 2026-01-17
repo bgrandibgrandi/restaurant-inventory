@@ -1,12 +1,19 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
+
+interface Store {
+  id: string;
+  name: string;
+  accountId: string;
+}
 
 export default function NewItem() {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
+  const [accountId, setAccountId] = useState<string>('');
   const [formData, setFormData] = useState({
     name: '',
     category: '',
@@ -14,12 +21,50 @@ export default function NewItem() {
     unit: 'kg',
     unitPrice: '',
     currency: 'EUR',
-    accountId: 'default-account',
   });
+
+  useEffect(() => {
+    const fetchAccountId = async () => {
+      try {
+        // Try to get accountId from localStorage first
+        if (typeof window !== 'undefined') {
+          const currentStore = localStorage.getItem('currentStore');
+          if (currentStore) {
+            const store = JSON.parse(currentStore);
+            setAccountId(store.accountId);
+            return;
+          }
+        }
+
+        // Fallback: fetch the first available store
+        const storesRes = await fetch('/api/stores');
+        if (storesRes.ok) {
+          const stores: Store[] = await storesRes.json();
+          if (stores.length > 0) {
+            setAccountId(stores[0].accountId);
+          } else {
+            alert('No stores found. Please create a store first.');
+            router.push('/onboarding');
+          }
+        }
+      } catch (error) {
+        console.error('Error fetching accountId:', error);
+        alert('Failed to load account information');
+      }
+    };
+
+    fetchAccountId();
+  }, [router]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
+
+    if (!accountId) {
+      alert('Account information not loaded. Please try again.');
+      setLoading(false);
+      return;
+    }
 
     try {
       const response = await fetch('/api/items', {
@@ -27,17 +72,21 @@ export default function NewItem() {
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify(formData),
+        body: JSON.stringify({
+          ...formData,
+          accountId: accountId,
+        }),
       });
 
       if (response.ok) {
         router.push('/dashboard');
       } else {
-        alert('Failed to create item');
+        const errorData = await response.json();
+        alert(`Failed to create item: ${errorData.error || 'Unknown error'}`);
       }
     } catch (error) {
       console.error('Error creating item:', error);
-      alert('An error occurred');
+      alert('An error occurred: ' + (error as Error).message);
     } finally {
       setLoading(false);
     }
