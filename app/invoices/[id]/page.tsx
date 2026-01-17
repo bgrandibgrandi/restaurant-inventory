@@ -511,7 +511,14 @@ function InvoiceItemCard({
 
           <div className="flex gap-2 pt-2">
             <button
-              onClick={() => onUpdate(editData)}
+              onClick={() => onUpdate({
+                suggestedName: editData.suggestedName,
+                suggestedUnit: editData.suggestedUnit,
+                categoryId: editData.categoryId || null,
+                matchedItemId: editData.matchedItemId || null,
+                quantity: parseFloat(editData.quantity) || 0,
+                unitPrice: editData.unitPrice ? parseFloat(editData.unitPrice) : null,
+              })}
               className="flex-1 py-2 bg-blue-600 text-white font-medium rounded-lg text-sm"
             >
               Save
