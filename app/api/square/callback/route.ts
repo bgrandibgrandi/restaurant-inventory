@@ -36,8 +36,15 @@ export async function GET(request: NextRequest) {
 
     const { storeId, accountId } = stateData;
 
+    // Determine if using sandbox based on application ID
+    const squareAppId = process.env.SQUARE_APPLICATION_ID || '';
+    const isSandbox = squareAppId.startsWith('sandbox-');
+    const baseUrl = isSandbox
+      ? 'https://connect.squareupsandbox.com'
+      : 'https://connect.squareup.com';
+
     // Exchange code for access token
-    const tokenResponse = await fetch('https://connect.squareup.com/oauth2/token', {
+    const tokenResponse = await fetch(`${baseUrl}/oauth2/token`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -69,7 +76,7 @@ export async function GET(request: NextRequest) {
     } = tokenData;
 
     // Get merchant info to get location(s)
-    const merchantResponse = await fetch('https://connect.squareup.com/v2/merchants/me', {
+    const merchantResponse = await fetch(`${baseUrl}/v2/merchants/me`, {
       headers: {
         'Authorization': `Bearer ${access_token}`,
         'Square-Version': '2024-01-18',
@@ -83,7 +90,7 @@ export async function GET(request: NextRequest) {
     }
 
     // Get locations
-    const locationsResponse = await fetch('https://connect.squareup.com/v2/locations', {
+    const locationsResponse = await fetch(`${baseUrl}/v2/locations`, {
       headers: {
         'Authorization': `Bearer ${access_token}`,
         'Square-Version': '2024-01-18',

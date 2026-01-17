@@ -81,8 +81,15 @@ export async function DELETE(request: NextRequest) {
     }
 
     // Revoke the token with Square (best practice)
+    // Determine if using sandbox based on application ID
+    const squareAppId = process.env.SQUARE_APPLICATION_ID || '';
+    const isSandbox = squareAppId.startsWith('sandbox-');
+    const baseUrl = isSandbox
+      ? 'https://connect.squareupsandbox.com'
+      : 'https://connect.squareup.com';
+
     try {
-      await fetch('https://connect.squareup.com/oauth2/revoke', {
+      await fetch(`${baseUrl}/oauth2/revoke`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

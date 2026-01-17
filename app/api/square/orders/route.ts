@@ -39,6 +39,13 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // Determine if using sandbox based on application ID
+    const squareAppId = process.env.SQUARE_APPLICATION_ID || '';
+    const isSandbox = squareAppId.startsWith('sandbox-');
+    const baseUrl = isSandbox
+      ? 'https://connect.squareupsandbox.com'
+      : 'https://connect.squareup.com';
+
     // Build date range for orders query
     const now = new Date();
     const defaultStartDate = new Date(now);
@@ -83,7 +90,7 @@ export async function POST(request: NextRequest) {
       }
 
       const response = await fetch(
-        'https://connect.squareup.com/v2/orders/search',
+        `${baseUrl}/v2/orders/search`,
         {
           method: 'POST',
           headers: {

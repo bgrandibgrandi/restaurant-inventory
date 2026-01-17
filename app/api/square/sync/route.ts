@@ -30,12 +30,19 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Connection not found' }, { status: 404 });
     }
 
+    // Determine if using sandbox based on application ID
+    const squareAppId = process.env.SQUARE_APPLICATION_ID || '';
+    const isSandbox = squareAppId.startsWith('sandbox-');
+    const baseUrl = isSandbox
+      ? 'https://connect.squareupsandbox.com'
+      : 'https://connect.squareup.com';
+
     // Fetch catalog from Square
     const catalogItems: any[] = [];
     let cursor: string | undefined;
 
     do {
-      const url = new URL('https://connect.squareup.com/v2/catalog/list');
+      const url = new URL(`${baseUrl}/v2/catalog/list`);
       url.searchParams.set('types', 'ITEM');
       if (cursor) url.searchParams.set('cursor', cursor);
 

@@ -75,7 +75,13 @@ export async function POST(request: NextRequest) {
       'INVENTORY_READ',
     ].join('+');
 
-    const authUrl = `https://connect.squareup.com/oauth2/authorize?client_id=${squareAppId}&response_type=code&scope=${scopes}&state=${statePayload}&redirect_uri=${encodeURIComponent(redirectUri)}`;
+    // Use sandbox URL if using sandbox credentials
+    const isSandbox = squareAppId.startsWith('sandbox-');
+    const baseUrl = isSandbox
+      ? 'https://connect.squareupsandbox.com'
+      : 'https://connect.squareup.com';
+
+    const authUrl = `${baseUrl}/oauth2/authorize?client_id=${squareAppId}&response_type=code&scope=${scopes}&state=${statePayload}&redirect_uri=${encodeURIComponent(redirectUri)}`;
 
     return NextResponse.json({ authUrl });
   } catch (error) {
