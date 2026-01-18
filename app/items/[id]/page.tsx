@@ -2,10 +2,10 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter, useParams } from 'next/navigation';
-import PageLayout from '@/components/ui/PageLayout';
+import PageLayout, { Button, Badge } from '@/components/ui/PageLayout';
 import { Accordion, AccordionSection } from '@/components/ui/Accordion';
 import { CategorySelector } from '@/components/CategorySelector';
-import { Button, Badge } from '@/components/ui/PageLayout';
+import { USAGE_UNITS, PURCHASE_UNITS } from '@/lib/constants';
 
 interface Category {
   id: string;
@@ -67,27 +67,6 @@ interface Item {
   createdAt: string;
   updatedAt: string;
 }
-
-const USAGE_UNITS = [
-  { value: 'kg', label: 'Kilogramos (kg)' },
-  { value: 'g', label: 'Gramos (g)' },
-  { value: 'L', label: 'Litros (L)' },
-  { value: 'mL', label: 'Mililitros (mL)' },
-  { value: 'ud', label: 'Unidades (ud)' },
-];
-
-const PURCHASE_UNITS = [
-  { value: 'kg', label: 'Kilogramos (kg)' },
-  { value: 'g', label: 'Gramos (g)' },
-  { value: 'L', label: 'Litros (L)' },
-  { value: 'mL', label: 'Mililitros (mL)' },
-  { value: 'ud', label: 'Unidades (ud)' },
-  { value: 'caja', label: 'Caja' },
-  { value: 'pack', label: 'Pack' },
-  { value: 'bolsa', label: 'Bolsa' },
-  { value: 'botella', label: 'Botella' },
-  { value: 'lata', label: 'Lata' },
-];
 
 export default function ItemDetail() {
   const router = useRouter();

@@ -51,7 +51,6 @@ interface AccordionSectionProps {
   icon?: ReactNode;
   badge?: ReactNode;
   children: ReactNode;
-  defaultOpen?: boolean;
 }
 
 export function AccordionSection({

@@ -29,6 +29,7 @@ export function CategorySelector({
   const [isOpen, setIsOpen] = useState(false);
   const [categories, setCategories] = useState<Category[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [selectedPath, setSelectedPath] = useState<Category[]>([]);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
@@ -36,13 +37,17 @@ export function CategorySelector({
   useEffect(() => {
     const fetchCategories = async () => {
       try {
+        setError(null);
         const res = await fetch('/api/categories?tree=true');
         if (res.ok) {
           const data = await res.json();
           setCategories(data);
+        } else {
+          setError('Error al cargar categorías');
         }
-      } catch (error) {
-        console.error('Error fetching categories:', error);
+      } catch (err) {
+        console.error('Error fetching categories:', err);
+        setError('Error al cargar categorías');
       } finally {
         setLoading(false);
       }
@@ -146,8 +151,8 @@ export function CategorySelector({
             : 'border-gray-300 hover:border-gray-400 bg-white'
         }`}
       >
-        <span className={`flex-1 truncate ${selectedPath.length === 0 ? 'text-gray-400' : 'text-gray-900'}`}>
-          {loading ? 'Loading...' : getDisplayText()}
+        <span className={`flex-1 truncate ${selectedPath.length === 0 || error ? 'text-gray-400' : 'text-gray-900'} ${error ? 'text-red-500' : ''}`}>
+          {loading ? 'Cargando...' : error ? error : getDisplayText()}
         </span>
 
         <div className="flex items-center gap-1">
