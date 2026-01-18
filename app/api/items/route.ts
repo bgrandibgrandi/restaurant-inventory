@@ -58,11 +58,27 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json();
-    const { name, description, unit, categoryId, supplierId } = body;
+    const {
+      name,
+      description,
+      unit,
+      usageUnit,
+      purchaseUnit,
+      defaultConversion,
+      categoryId,
+      supplierId,
+      sku,
+      barcode,
+      costPrice,
+      minStockLevel,
+      maxStockLevel,
+      isSoldDirectly,
+      isTransformed,
+    } = body;
 
-    if (!name || !unit) {
+    if (!name) {
       return NextResponse.json(
-        { error: 'Name and unit are required' },
+        { error: 'Name is required' },
         { status: 400 }
       );
     }
@@ -71,9 +87,19 @@ export async function POST(request: NextRequest) {
       data: {
         name,
         description: description || null,
-        unit,
+        unit: usageUnit || unit || 'kg',
+        usageUnit: usageUnit || unit || 'kg',
+        purchaseUnit: purchaseUnit || usageUnit || unit || 'kg',
+        defaultConversion: defaultConversion || null,
         categoryId: categoryId || null,
         supplierId: supplierId || null,
+        sku: sku || null,
+        barcode: barcode || null,
+        costPrice: costPrice || null,
+        minStockLevel: minStockLevel || null,
+        maxStockLevel: maxStockLevel || null,
+        isSoldDirectly: isSoldDirectly || false,
+        isTransformed: isTransformed !== false,
         accountId: session.user.accountId,
         storeId: userWithStore.selectedStoreId,
       },

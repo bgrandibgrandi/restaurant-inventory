@@ -20,8 +20,34 @@ export async function GET(
         accountId: session.user.accountId,
       },
       include: {
-        category: true,
+        category: {
+          include: {
+            parent: {
+              include: {
+                parent: true,
+              },
+            },
+          },
+        },
         supplier: true,
+        supplierPrices: {
+          include: {
+            supplier: true,
+          },
+          orderBy: [
+            { isPreferred: 'desc' },
+            { lastPurchaseDate: 'desc' },
+          ],
+        },
+        priceHistory: {
+          include: {
+            supplier: true,
+          },
+          orderBy: {
+            effectiveDate: 'desc',
+          },
+          take: 20,
+        },
       },
     });
 
@@ -71,6 +97,9 @@ export async function PUT(
     if ('name' in body) updateData.name = body.name;
     if ('description' in body) updateData.description = body.description || null;
     if ('unit' in body) updateData.unit = body.unit;
+    if ('usageUnit' in body) updateData.usageUnit = body.usageUnit;
+    if ('purchaseUnit' in body) updateData.purchaseUnit = body.purchaseUnit;
+    if ('defaultConversion' in body) updateData.defaultConversion = body.defaultConversion;
     if ('categoryId' in body) updateData.categoryId = body.categoryId || null;
     if ('supplierId' in body) updateData.supplierId = body.supplierId || null;
     if ('sku' in body) updateData.sku = body.sku || null;
@@ -78,13 +107,42 @@ export async function PUT(
     if ('minStockLevel' in body) updateData.minStockLevel = body.minStockLevel;
     if ('maxStockLevel' in body) updateData.maxStockLevel = body.maxStockLevel;
     if ('costPrice' in body) updateData.costPrice = body.costPrice;
+    if ('isSoldDirectly' in body) updateData.isSoldDirectly = body.isSoldDirectly;
+    if ('isTransformed' in body) updateData.isTransformed = body.isTransformed;
+    if ('needsReview' in body) updateData.needsReview = body.needsReview;
 
     const item = await prisma.item.update({
       where: { id },
       data: updateData,
       include: {
-        category: true,
+        category: {
+          include: {
+            parent: {
+              include: {
+                parent: true,
+              },
+            },
+          },
+        },
         supplier: true,
+        supplierPrices: {
+          include: {
+            supplier: true,
+          },
+          orderBy: [
+            { isPreferred: 'desc' },
+            { lastPurchaseDate: 'desc' },
+          ],
+        },
+        priceHistory: {
+          include: {
+            supplier: true,
+          },
+          orderBy: {
+            effectiveDate: 'desc',
+          },
+          take: 20,
+        },
       },
     });
 
