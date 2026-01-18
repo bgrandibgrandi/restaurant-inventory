@@ -4,6 +4,7 @@ import { useState, useEffect, useMemo, useRef } from 'react';
 import Link from 'next/link';
 import PageLayout, { Card, LinkButton, Badge, EmptyState } from '@/components/ui/PageLayout';
 import { CategorySelector } from '@/components/CategorySelector';
+import { DuplicateReviewModal } from '@/components/DuplicateReviewModal';
 
 interface Category {
   id: string;
@@ -31,6 +32,13 @@ interface Item {
   sku: string | null;
   costPrice: number | null;
   createdAt: string;
+  needsReview?: boolean;
+}
+
+interface DuplicateSummary {
+  pendingDuplicates: number;
+  totalItems: number;
+  itemsNeedingReview: number;
 }
 
 type EditingField = 'name' | 'category' | 'supplier' | 'unit' | 'cost' | null;
@@ -54,6 +62,12 @@ export default function ItemsPage() {
   const [filterCategory, setFilterCategory] = useState('');
   const [filterSupplier, setFilterSupplier] = useState('');
   const [filterUnit, setFilterUnit] = useState('');
+  const [filterReview, setFilterReview] = useState(false);
+
+  // Duplicate summary
+  const [duplicateSummary, setDuplicateSummary] = useState<DuplicateSummary | null>(null);
+  const [scanning, setScanning] = useState(false);
+  const [showDuplicateModal, setShowDuplicateModal] = useState(false);
 
   useEffect(() => {
     fetchData();
@@ -70,19 +84,38 @@ export default function ItemsPage() {
 
   const fetchData = async () => {
     try {
-      const [itemsRes, categoriesRes, suppliersRes] = await Promise.all([
+      const [itemsRes, categoriesRes, suppliersRes, duplicatesRes] = await Promise.all([
         fetch('/api/items'),
         fetch('/api/categories?flat=true'),
         fetch('/api/suppliers'),
+        fetch('/api/items/scan-duplicates'),
       ]);
 
       if (itemsRes.ok) setItems(await itemsRes.json());
       if (categoriesRes.ok) setCategories(await categoriesRes.json());
       if (suppliersRes.ok) setSuppliers(await suppliersRes.json());
+      if (duplicatesRes.ok) setDuplicateSummary(await duplicatesRes.json());
     } catch (error) {
       console.error('Error fetching data:', error);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleScanDuplicates = async () => {
+    setScanning(true);
+    try {
+      const response = await fetch('/api/items/scan-duplicates', { method: 'POST' });
+      if (response.ok) {
+        const result = await response.json();
+        alert(result.message);
+        // Refresh data
+        fetchData();
+      }
+    } catch (error) {
+      console.error('Error scanning duplicates:', error);
+    } finally {
+      setScanning(false);
     }
   };
 
@@ -109,10 +142,11 @@ export default function ItemsPage() {
         item.supplierId === filterSupplier;
 
       const matchesUnit = !filterUnit || item.unit === filterUnit;
+      const matchesReview = !filterReview || item.needsReview === true;
 
-      return matchesSearch && matchesCategory && matchesSupplier && matchesUnit;
+      return matchesSearch && matchesCategory && matchesSupplier && matchesUnit && matchesReview;
     });
-  }, [items, searchQuery, filterCategory, filterSupplier, filterUnit]);
+  }, [items, searchQuery, filterCategory, filterSupplier, filterUnit, filterReview]);
 
   const handleDelete = async (id: string) => {
     try {
@@ -226,9 +260,10 @@ export default function ItemsPage() {
     setFilterCategory('');
     setFilterSupplier('');
     setFilterUnit('');
+    setFilterReview(false);
   };
 
-  const hasFilters = searchQuery || filterCategory || filterSupplier || filterUnit;
+  const hasFilters = searchQuery || filterCategory || filterSupplier || filterUnit || filterReview;
 
   const renderEditableCell = (
     item: Item,
@@ -356,16 +391,59 @@ export default function ItemsPage() {
   };
 
   const headerActions = (
-    <LinkButton href="/items/new" variant="primary" size="sm">
-      <svg className="w-4 h-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-      </svg>
-      New Item
-    </LinkButton>
+    <div className="flex gap-2">
+      <button
+        onClick={handleScanDuplicates}
+        disabled={scanning}
+        className="inline-flex items-center px-4 py-2 bg-orange-100 hover:bg-orange-200 text-orange-700 text-sm font-medium rounded-xl transition disabled:opacity-50"
+      >
+        {scanning ? (
+          <>
+            <div className="w-4 h-4 border-2 border-orange-400 border-t-transparent rounded-full animate-spin mr-1.5"></div>
+            Escaneando...
+          </>
+        ) : (
+          <>
+            <svg className="w-4 h-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+            </svg>
+            Buscar duplicados
+          </>
+        )}
+      </button>
+      <LinkButton href="/items/new" variant="primary" size="sm">
+        <svg className="w-4 h-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+        </svg>
+        New Item
+      </LinkButton>
+    </div>
   );
 
   return (
     <PageLayout title="Inventory Items" subtitle="Manage your inventory items" backHref="/dashboard" actions={headerActions}>
+      {/* Duplicate alert banner */}
+      {duplicateSummary && duplicateSummary.pendingDuplicates > 0 && (
+        <Card className="bg-gradient-to-r from-orange-50 to-amber-50 border-orange-200/50 mb-6">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3 text-sm text-orange-700">
+              <div className="w-8 h-8 bg-orange-100 rounded-lg flex items-center justify-center flex-shrink-0">
+                <svg className="w-4 h-4 text-orange-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                </svg>
+              </div>
+              <p><strong>{duplicateSummary.pendingDuplicates} posible(s) duplicado(s)</strong> encontrados. Revisa los items marcados para fusionarlos o descartarlos.</p>
+            </div>
+            <button
+              onClick={() => setShowDuplicateModal(true)}
+              className="px-4 py-2 bg-orange-600 hover:bg-orange-700 text-white text-sm font-medium rounded-lg transition"
+            >
+              Revisar duplicados
+            </button>
+          </div>
+        </Card>
+      )}
+
       {/* Info banner */}
       <Card className="bg-gradient-to-r from-blue-50 to-indigo-50 border-blue-200/50 mb-6">
         <div className="flex items-center gap-3 text-sm text-blue-700">
@@ -453,6 +531,24 @@ export default function ItemsPage() {
             </select>
           </div>
 
+          {/* Review filter */}
+          <div className="flex items-center">
+            <label className="flex items-center gap-2 px-4 py-2.5 bg-white/80 border border-gray-200/50 rounded-xl cursor-pointer hover:bg-orange-50 transition">
+              <input
+                type="checkbox"
+                checked={filterReview}
+                onChange={(e) => setFilterReview(e.target.checked)}
+                className="w-4 h-4 text-orange-600 border-gray-300 rounded focus:ring-orange-500"
+              />
+              <span className="text-sm text-gray-700">Pendientes de revisión</span>
+              {duplicateSummary && duplicateSummary.itemsNeedingReview > 0 && (
+                <span className="px-2 py-0.5 text-xs font-medium bg-orange-100 text-orange-700 rounded-full">
+                  {duplicateSummary.itemsNeedingReview}
+                </span>
+              )}
+            </label>
+          </div>
+
           {/* Clear filters */}
           {hasFilters && (
             <button
@@ -530,7 +626,14 @@ export default function ItemsPage() {
                         item,
                         'name',
                         <div>
-                          <div className="text-sm font-medium text-gray-900">{item.name}</div>
+                          <div className="flex items-center gap-2">
+                            <span className="text-sm font-medium text-gray-900">{item.name}</span>
+                            {item.needsReview && (
+                              <span className="px-2 py-0.5 text-xs font-medium bg-orange-100 text-orange-700 rounded-full">
+                                Revisar
+                              </span>
+                            )}
+                          </div>
                           {item.sku && (
                             <div className="text-xs text-gray-400 mt-0.5">SKU: {item.sku}</div>
                           )}
@@ -635,6 +738,15 @@ export default function ItemsPage() {
           </div>
         </div>
       )}
+
+      {/* Duplicate Review Modal */}
+      <DuplicateReviewModal
+        isOpen={showDuplicateModal}
+        onClose={() => setShowDuplicateModal(false)}
+        onResolved={() => {
+          fetchData();
+        }}
+      />
     </PageLayout>
   );
 }
