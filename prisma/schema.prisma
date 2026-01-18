@@ -14,6 +14,10 @@ model Account {
   name            String
   baseCurrency    String          @default("EUR")
   createdAt       DateTime        @default(now())
+
+  // Price alert settings
+  priceAlertThreshold Float       @default(2.0)  // Alert when price changes > X%
+
   users           User[]
   stores          Store[]
   items           Item[]
@@ -36,6 +40,11 @@ model Account {
   squareItemMappings     SquareItemMapping[]
   squareModifierMappings SquareModifierMapping[]
   squareOrderSyncs       SquareOrderSync[]
+  // Phase 1: Items Database
+  supplierItemPrices     SupplierItemPrice[]
+  itemIdentifiers        ItemIdentifier[]
+  priceHistories         PriceHistory[]
+  duplicateCandidates    DuplicateCandidate[]
 }
 
 model Role {
@@ -99,46 +108,98 @@ model Item {
   id                  String              @id @default(cuid())
   name                String
   description         String?
-  invoiceItems        InvoiceItem[]
-  unit                String              // kg, L, pieces, etc.
+
+  // Unit system (two-level: purchase vs usage)
+  unit                String              // Usage unit for recipes (kg, L, pieces) - keep for backwards compatibility
+  usageUnit           String?             // Primary unit for recipes (kg, L, pieces) - new field
+  purchaseUnit        String?             // Default purchase unit (case, box, etc.)
+  defaultConversion   Float?              // Default units per purchase (e.g., 10 for "10kg case")
+
+  // Category and Supplier
   categoryId          String?
   category            Category?           @relation(fields: [categoryId], references: [id])
-  supplierId          String?
+  supplierId          String?             // Preferred supplier
   supplier            Supplier?           @relation(fields: [supplierId], references: [id])
+
+  // Store and Account
   storeId             String?             // Items are store-specific (optional during migration)
   store               Store?              @relation(fields: [storeId], references: [id])
   accountId           String
   account             Account             @relation(fields: [accountId], references: [id])
+
+  // Stock levels
+  minStockLevel       Float?              // Optional minimum stock alert level
+  maxStockLevel       Float?              // Optional maximum stock level
+
+  // Identification
+  sku                 String?             // Optional internal SKU/product code
+  barcode             String?             // Optional EAN/UPC barcode
+
+  // Pricing (preferred supplier's current price)
+  costPrice           Float?              // Default cost price per usage unit
+
+  // Item type flags
+  isSoldDirectly      Boolean             @default(false) // Sold without transformation (beer, wine, etc.)
+  isTransformed       Boolean             @default(true)  // Used in recipes/escandallos
+  needsReview         Boolean             @default(false) // Flagged for duplicate review
+
+  // Square integration
+  squareCatalogId     String?             // If synced from Square catalog
+
+  // Relations
+  invoiceItems        InvoiceItem[]
   stockEntries        StockEntry[]
   stockMovements      StockMovement[]
   stockTransferItems  StockTransferItem[]
-  minStockLevel       Float?              // Optional minimum stock alert level
-  maxStockLevel       Float?              // Optional maximum stock level
-  sku                 String?             // Optional SKU/product code
-  barcode             String?             // Optional barcode
-  costPrice           Float?              // Default cost price
-  // Recipe relations
   recipeIngredients   RecipeIngredient[]
   squareModifierMappings SquareModifierMapping[]
+
+  // Phase 1: Multi-supplier pricing
+  supplierPrices      SupplierItemPrice[]
+  identifiers         ItemIdentifier[]
+  priceHistory        PriceHistory[]
+  duplicatesOf        DuplicateCandidate[] @relation("DuplicateItem")
+  hasDuplicates       DuplicateCandidate[] @relation("MatchedItem")
+
   // For copying between stores
   sourceItemId        String?             // If copied from another store, reference to original
   createdAt           DateTime            @default(now())
   updatedAt           DateTime            @updatedAt
+
+  @@index([accountId])
+  @@index([storeId])
+  @@index([categoryId])
+  @@index([supplierId])
 }
 
-// Reusable Categories
+// Reusable Categories with hierarchy (Root > Family > Subfamily)
 model Category {
   id           String        @id @default(cuid())
   name         String
+  icon         String?       // Emoji icon for display (🥑, 🍎, etc.)
+  sortOrder    Int           @default(0)  // For ordering categories
+  level        Int           @default(0)  // 0=root, 1=family, 2=subfamily
+  isSystem     Boolean       @default(false) // System categories can't be deleted
+  isActive     Boolean       @default(true)
+
+  // Hierarchy
   parentId     String?
   parent       Category?     @relation("CategoryToCategory", fields: [parentId], references: [id], onDelete: NoAction, onUpdate: NoAction)
   children     Category[]    @relation("CategoryToCategory")
+
+  // Relations
   invoiceItems InvoiceItem[]
   accountId    String
   account      Account       @relation(fields: [accountId], references: [id])
   items        Item[]
   recipes      Recipe[]
   createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt @default(now())
+
+  @@unique([name, parentId, accountId]) // Unique name within same parent
+  @@index([parentId])
+  @@index([level])
+  @@index([accountId])
 }
 
 // Actual Stock Entries (quantity + cost per store)
@@ -200,13 +261,21 @@ model Supplier {
   accountId       String
   account         Account   @relation(fields: [accountId], references: [id])
   invoices        Invoice[]
-  items           Item[]
+  items           Item[]    // Items where this is the preferred supplier
+
+  // Phase 1: Multi-supplier pricing
+  itemPrices      SupplierItemPrice[]
+  itemIdentifiers ItemIdentifier[]
+  priceHistories  PriceHistory[]
+
   // For copying between stores
   sourceSupplierId String?  // If copied from another store, reference to original
   createdAt       DateTime  @default(now())
   updatedAt       DateTime  @updatedAt
 
   @@unique([name, accountId]) // Keep original constraint for now
+  @@index([storeId])
+  @@index([accountId])
 }
 
 // Invoice import for tracking purchases
@@ -632,4 +701,125 @@ model SquareOrderSync {
   createdAt           DateTime         @default(now())
 
   @@unique([squareOrderId, squareConnectionId])
+}
+
+// ============================================
+// PHASE 1: MULTI-SUPPLIER PRICING & DEDUPLICATION
+// ============================================
+
+// Multi-supplier pricing - allows same item from multiple suppliers
+model SupplierItemPrice {
+  id                  String    @id @default(cuid())
+  itemId              String
+  supplierId          String
+
+  // Pricing
+  purchasePrice       Float     // Cost per purchase unit
+  purchaseUnit        String    // "case", "10kg box", "pallet"
+  unitsPerPurchase    Float     @default(1) // How many usage units in one purchase unit
+
+  // Supplier-specific identifiers
+  supplierSku         String?   // Supplier's product code for this item
+  supplierProductName String?   // How supplier calls this item
+
+  // Ordering info
+  minimumOrderQty     Float?    // Minimum order quantity
+  leadTimeDays        Int?      // Delivery lead time
+
+  // Status
+  isPreferred         Boolean   @default(false)  // Is this the default supplier?
+  isActive            Boolean   @default(true)
+  lastPurchaseDate    DateTime?
+  lastPurchasePrice   Float?    // Track last actual price paid
+
+  // Audit
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
+  accountId           String
+
+  item      Item      @relation(fields: [itemId], references: [id], onDelete: Cascade)
+  supplier  Supplier  @relation(fields: [supplierId], references: [id], onDelete: Cascade)
+  account   Account   @relation(fields: [accountId], references: [id])
+
+  @@unique([itemId, supplierId])
+  @@index([supplierId])
+  @@index([itemId])
+  @@index([accountId])
+}
+
+// Track all ways an item can be identified for deduplication
+model ItemIdentifier {
+  id              String    @id @default(cuid())
+  itemId          String
+  identifierType  String    // "barcode", "supplier_sku", "name_fingerprint", "alias"
+  identifierValue String
+  supplierId      String?   // Which supplier uses this identifier (for supplier_sku)
+  confidence      Float     @default(1.0)  // 1.0 for exact matches, lower for AI matches
+  isVerified      Boolean   @default(false) // User confirmed this match
+  source          String?   // "invoice", "manual", "square", "scan"
+  createdAt       DateTime  @default(now())
+  accountId       String
+
+  item     Item      @relation(fields: [itemId], references: [id], onDelete: Cascade)
+  supplier Supplier? @relation(fields: [supplierId], references: [id])
+  account  Account   @relation(fields: [accountId], references: [id])
+
+  @@unique([identifierType, identifierValue, accountId])
+  @@index([identifierValue])
+  @@index([itemId])
+  @@index([accountId])
+}
+
+// Track price changes over time
+model PriceHistory {
+  id                String    @id @default(cuid())
+  itemId            String
+  supplierId        String?
+
+  // Price info
+  price             Float     // Per usage unit
+  purchasePrice     Float?    // Per purchase unit (if different)
+
+  // Context
+  effectiveDate     DateTime  @default(now())
+  source            String    // "invoice", "manual", "supplier_update"
+  sourceId          String?   // Reference to invoice, etc.
+
+  // Change tracking
+  previousPrice     Float?
+  changePercent     Float?    // Calculated: ((new - old) / old) * 100
+
+  createdAt         DateTime  @default(now())
+  accountId         String
+
+  item     Item      @relation(fields: [itemId], references: [id], onDelete: Cascade)
+  supplier Supplier? @relation(fields: [supplierId], references: [id])
+  account  Account   @relation(fields: [accountId], references: [id])
+
+  @@index([itemId, effectiveDate])
+  @@index([supplierId])
+  @@index([accountId])
+}
+
+// Track potential duplicate items for review
+model DuplicateCandidate {
+  id              String    @id @default(cuid())
+  itemId          String    // The item that might be a duplicate
+  matchedItemId   String    // The existing item it might match
+  matchType       String    // "barcode", "supplier_sku", "name_similarity", "ai_match"
+  confidence      Float     // Match confidence score (0.0 - 1.0)
+  status          String    @default("pending") // "pending", "confirmed_match", "not_duplicate", "merged"
+  reviewedAt      DateTime?
+  reviewedBy      String?
+  notes           String?
+  createdAt       DateTime  @default(now())
+  accountId       String
+
+  item        Item    @relation("DuplicateItem", fields: [itemId], references: [id], onDelete: Cascade)
+  matchedItem Item    @relation("MatchedItem", fields: [matchedItemId], references: [id], onDelete: Cascade)
+  account     Account @relation(fields: [accountId], references: [id])
+
+  @@unique([itemId, matchedItemId])
+  @@index([status])
+  @@index([accountId])
 }
