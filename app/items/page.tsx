@@ -3,10 +3,15 @@
 import { useState, useEffect, useMemo, useRef } from 'react';
 import Link from 'next/link';
 import PageLayout, { Card, LinkButton, Badge, EmptyState } from '@/components/ui/PageLayout';
+import { CategorySelector } from '@/components/CategorySelector';
 
 interface Category {
   id: string;
   name: string;
+  icon?: string | null;
+  level: number;
+  parentId: string | null;
+  children?: Category[];
 }
 
 interface Supplier {
@@ -44,11 +49,6 @@ export default function ItemsPage() {
   const [saving, setSaving] = useState(false);
   const inputRef = useRef<HTMLInputElement | HTMLSelectElement>(null);
 
-  // New category creation
-  const [showNewCategory, setShowNewCategory] = useState(false);
-  const [newCategoryName, setNewCategoryName] = useState('');
-  const [creatingCategory, setCreatingCategory] = useState(false);
-
   // Filter states
   const [searchQuery, setSearchQuery] = useState('');
   const [filterCategory, setFilterCategory] = useState('');
@@ -72,7 +72,7 @@ export default function ItemsPage() {
     try {
       const [itemsRes, categoriesRes, suppliersRes] = await Promise.all([
         fetch('/api/items'),
-        fetch('/api/categories'),
+        fetch('/api/categories?flat=true'),
         fetch('/api/suppliers'),
       ]);
 
@@ -159,11 +159,14 @@ export default function ItemsPage() {
     setEditingItemId(null);
     setEditingField(null);
     setEditValue('');
-    setShowNewCategory(false);
-    setNewCategoryName('');
   };
 
   const saveEditing = async () => {
+    if (!editingItemId || !editingField) return;
+    await saveEditingWithValue(editValue);
+  };
+
+  const saveEditingWithValue = async (value: string) => {
     if (!editingItemId || !editingField) return;
 
     setSaving(true);
@@ -172,19 +175,19 @@ export default function ItemsPage() {
 
       switch (editingField) {
         case 'name':
-          updateData.name = editValue;
+          updateData.name = value;
           break;
         case 'category':
-          updateData.categoryId = editValue || null;
+          updateData.categoryId = value || null;
           break;
         case 'supplier':
-          updateData.supplierId = editValue || null;
+          updateData.supplierId = value || null;
           break;
         case 'unit':
-          updateData.unit = editValue;
+          updateData.unit = value;
           break;
         case 'cost':
-          updateData.costPrice = editValue ? parseFloat(editValue) : null;
+          updateData.costPrice = value ? parseFloat(value) : null;
           break;
       }
 
@@ -215,34 +218,6 @@ export default function ItemsPage() {
       saveEditing();
     } else if (e.key === 'Escape') {
       cancelEditing();
-    }
-  };
-
-  const createNewCategory = async () => {
-    if (!newCategoryName.trim()) return;
-
-    setCreatingCategory(true);
-    try {
-      const response = await fetch('/api/categories', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: newCategoryName.trim() }),
-      });
-
-      if (response.ok) {
-        const newCategory = await response.json();
-        setCategories([...categories, newCategory]);
-        setEditValue(newCategory.id);
-        setShowNewCategory(false);
-        setNewCategoryName('');
-      } else {
-        alert('Failed to create category');
-      }
-    } catch (error) {
-      console.error('Error creating category:', error);
-      alert('An error occurred');
-    } finally {
-      setCreatingCategory(false);
     }
   };
 
@@ -296,58 +271,20 @@ export default function ItemsPage() {
 
       case 'category':
         return (
-          <div className="space-y-2">
-            <select
-              ref={inputRef as React.RefObject<HTMLSelectElement>}
-              value={editValue}
-              onChange={(e) => {
-                if (e.target.value === '__new__') {
-                  setShowNewCategory(true);
-                } else {
-                  setEditValue(e.target.value);
-                }
+          <div className="min-w-[300px]">
+            <CategorySelector
+              value={editValue || null}
+              onChange={(categoryId) => {
+                setEditValue(categoryId || '');
+                // Auto-save after selection
+                setTimeout(() => {
+                  if (editingItemId && editingField === 'category') {
+                    saveEditingWithValue(categoryId || '');
+                  }
+                }, 100);
               }}
-              onKeyDown={handleKeyDown}
-              onBlur={() => !showNewCategory && saveEditing()}
-              disabled={saving}
-              className="w-full px-3 py-1.5 border border-blue-400 rounded-lg text-sm focus:ring-2 focus:ring-blue-500/20 focus:outline-none bg-white"
-            >
-              <option value="">No Category</option>
-              {categories.map((cat) => (
-                <option key={cat.id} value={cat.id}>
-                  {cat.name}
-                </option>
-              ))}
-              <option value="__new__">+ Add New Category</option>
-            </select>
-            {showNewCategory && (
-              <div className="flex gap-2">
-                <input
-                  type="text"
-                  value={newCategoryName}
-                  onChange={(e) => setNewCategoryName(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter') {
-                      e.preventDefault();
-                      createNewCategory();
-                    } else if (e.key === 'Escape') {
-                      setShowNewCategory(false);
-                      setNewCategoryName('');
-                    }
-                  }}
-                  placeholder="Category name..."
-                  autoFocus
-                  className="flex-1 px-3 py-1.5 border border-gray-300 rounded-lg text-sm bg-white"
-                />
-                <button
-                  onClick={createNewCategory}
-                  disabled={creatingCategory || !newCategoryName.trim()}
-                  className="px-3 py-1.5 bg-gradient-to-r from-green-500 to-emerald-600 text-white rounded-lg text-xs font-medium disabled:opacity-50"
-                >
-                  {creatingCategory ? '...' : 'Add'}
-                </button>
-              </div>
-            )}
+              placeholder="Sin categoría"
+            />
           </div>
         );
 
@@ -462,7 +399,7 @@ export default function ItemsPage() {
           </div>
 
           {/* Category filter */}
-          <div className="w-44">
+          <div className="w-56">
             <label className="block text-xs font-medium text-gray-500 mb-1.5">Category</label>
             <select
               value={filterCategory}
@@ -473,7 +410,9 @@ export default function ItemsPage() {
               <option value="none">Uncategorized</option>
               {categories.map((cat) => (
                 <option key={cat.id} value={cat.id}>
-                  {cat.name}
+                  {cat.level === 0 ? (cat.icon ? `${cat.icon} ` : '') + cat.name.toUpperCase() :
+                   cat.level === 1 ? `  └ ${cat.icon ? cat.icon + ' ' : ''}${cat.name}` :
+                   `      └ ${cat.icon ? cat.icon + ' ' : ''}${cat.name}`}
                 </option>
               ))}
             </select>

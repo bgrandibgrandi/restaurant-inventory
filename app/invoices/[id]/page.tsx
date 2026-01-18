@@ -3,10 +3,14 @@
 import { useState, useEffect } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import Link from 'next/link';
+import { CategorySelector } from '@/components/CategorySelector';
 
 type Category = {
   id: string;
   name: string;
+  icon?: string | null;
+  level: number;
+  parentId: string | null;
 };
 
 type Item = {
@@ -72,7 +76,6 @@ export default function InvoiceDetailPage() {
   const invoiceId = params.id as string;
 
   const [invoice, setInvoice] = useState<Invoice | null>(null);
-  const [categories, setCategories] = useState<Category[]>([]);
   const [existingItems, setExistingItems] = useState<Item[]>([]);
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
   const [stores, setStores] = useState<Store[]>([]);
@@ -119,9 +122,8 @@ export default function InvoiceDetailPage() {
 
   const fetchData = async () => {
     try {
-      const [invoiceRes, categoriesRes, itemsRes, suppliersRes, storesRes] = await Promise.all([
+      const [invoiceRes, itemsRes, suppliersRes, storesRes] = await Promise.all([
         fetch(`/api/invoices/${invoiceId}`),
-        fetch('/api/categories'),
         fetch('/api/items'),
         fetch('/api/suppliers'),
         fetch('/api/stores'),
@@ -132,16 +134,14 @@ export default function InvoiceDetailPage() {
         return;
       }
 
-      const [invoiceData, categoriesData, itemsData, suppliersData, storesData] = await Promise.all([
+      const [invoiceData, itemsData, suppliersData, storesData] = await Promise.all([
         invoiceRes.json(),
-        categoriesRes.json(),
         itemsRes.json(),
         suppliersRes.json(),
         storesRes.json(),
       ]);
 
       setInvoice(invoiceData);
-      setCategories(categoriesData);
       setExistingItems(itemsData);
       setSuppliers(suppliersData);
       setStores(storesData);
@@ -322,25 +322,6 @@ export default function InvoiceDetailPage() {
     } finally {
       setChangingStore(false);
     }
-  };
-
-  const handleCreateCategory = async (name: string): Promise<Category | null> => {
-    try {
-      const response = await fetch('/api/categories', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name }),
-      });
-
-      if (response.ok) {
-        const newCategory = await response.json();
-        setCategories((prev) => [...prev, newCategory]);
-        return newCategory;
-      }
-    } catch (error) {
-      console.error('Error creating category:', error);
-    }
-    return null;
   };
 
   const handleUpdateItem = async (itemId: string, updates: Partial<InvoiceItem>) => {
@@ -876,14 +857,12 @@ export default function InvoiceDetailPage() {
                 <InvoiceItemCard
                   key={item.id}
                   item={item}
-                  categories={categories}
                   existingItems={existingItems}
                   isEditing={editingItem === item.id}
                   onEdit={() => setEditingItem(item.id)}
                   onCancelEdit={() => setEditingItem(null)}
                   onUpdate={(updates) => handleUpdateItem(item.id, updates)}
                   onSkip={() => handleSkipItem(item.id)}
-                  onCreateCategory={handleCreateCategory}
                 />
               ))}
             </div>
@@ -962,24 +941,20 @@ export default function InvoiceDetailPage() {
 // Invoice Item Card Component
 function InvoiceItemCard({
   item,
-  categories,
   existingItems,
   isEditing,
   onEdit,
   onCancelEdit,
   onUpdate,
   onSkip,
-  onCreateCategory,
 }: {
   item: InvoiceItem;
-  categories: Category[];
   existingItems: Item[];
   isEditing: boolean;
   onEdit: () => void;
   onCancelEdit: () => void;
   onUpdate: (updates: Partial<InvoiceItem>) => void;
   onSkip: () => void;
-  onCreateCategory: (name: string) => Promise<Category | null>;
 }) {
   const [editData, setEditData] = useState({
     suggestedName: item.suggestedName || item.rawName,
@@ -989,24 +964,9 @@ function InvoiceItemCard({
     quantity: item.quantity.toString(),
     unitPrice: item.unitPrice?.toString() || '',
   });
-  const [showNewCategory, setShowNewCategory] = useState(false);
-  const [newCategoryName, setNewCategoryName] = useState(item.suggestedCategoryName || '');
-  const [creatingCategory, setCreatingCategory] = useState(false);
 
   const isSkipped = item.status === 'skipped';
   const isConfirmed = item.status === 'confirmed' || item.status === 'created';
-
-  const handleCreateCategory = async () => {
-    if (!newCategoryName.trim()) return;
-    setCreatingCategory(true);
-    const newCategory = await onCreateCategory(newCategoryName.trim());
-    if (newCategory) {
-      setEditData({ ...editData, categoryId: newCategory.id });
-      setShowNewCategory(false);
-      setNewCategoryName('');
-    }
-    setCreatingCategory(false);
-  };
 
   if (isEditing) {
     return (
@@ -1064,63 +1024,15 @@ function InvoiceItemCard({
             </div>
             <div>
               <label className="block text-xs font-medium text-gray-700 mb-1">Category</label>
-              <select
-                value={editData.categoryId}
-                onChange={(e) => {
-                  if (e.target.value === '__new__') {
-                    setShowNewCategory(true);
-                    setNewCategoryName(item.suggestedCategoryName || '');
-                  } else {
-                    setEditData({ ...editData, categoryId: e.target.value });
-                  }
-                }}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
-              >
-                <option value="">No category</option>
-                {categories.map((cat) => (
-                  <option key={cat.id} value={cat.id}>
-                    {cat.name}
-                  </option>
-                ))}
-                <option value="__new__">+ Create new category</option>
-              </select>
+              <CategorySelector
+                value={editData.categoryId || null}
+                onChange={(categoryId) => setEditData({ ...editData, categoryId: categoryId || '' })}
+                placeholder="Sin categoría"
+              />
               {item.suggestedCategoryName && !editData.categoryId && (
                 <p className="mt-1 text-xs text-blue-600">
                   Suggested: {item.suggestedCategoryName}
                 </p>
-              )}
-              {showNewCategory && (
-                <div className="mt-2 flex gap-2">
-                  <input
-                    type="text"
-                    value={newCategoryName}
-                    onChange={(e) => setNewCategoryName(e.target.value)}
-                    placeholder="Category name..."
-                    className="flex-1 px-3 py-2 border border-gray-300 rounded-lg text-sm"
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter') {
-                        e.preventDefault();
-                        handleCreateCategory();
-                      } else if (e.key === 'Escape') {
-                        setShowNewCategory(false);
-                      }
-                    }}
-                    autoFocus
-                  />
-                  <button
-                    onClick={handleCreateCategory}
-                    disabled={creatingCategory || !newCategoryName.trim()}
-                    className="px-3 py-2 bg-green-600 text-white rounded-lg text-sm disabled:opacity-50"
-                  >
-                    {creatingCategory ? '...' : 'Add'}
-                  </button>
-                  <button
-                    onClick={() => setShowNewCategory(false)}
-                    className="px-3 py-2 bg-gray-200 text-gray-700 rounded-lg text-sm"
-                  >
-                    Cancel
-                  </button>
-                </div>
               )}
             </div>
           </div>

@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
+import { CategorySelector } from '@/components/CategorySelector';
 
 interface Store {
   id: string;
@@ -12,6 +13,9 @@ interface Store {
 interface Category {
   id: string;
   name: string;
+  icon?: string | null;
+  level: number;
+  parentId: string | null;
 }
 
 interface Item {
@@ -37,7 +41,6 @@ export default function RecordWaste() {
   const [stores, setStores] = useState<Store[]>([]);
   const [items, setItems] = useState<Item[]>([]);
   const [filteredItems, setFilteredItems] = useState<Item[]>([]);
-  const [categories, setCategories] = useState<Category[]>([]);
   const [wasteReasons, setWasteReasons] = useState<WasteReason[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
 
@@ -80,12 +83,11 @@ export default function RecordWaste() {
 
   const fetchData = async () => {
     try {
-      const [storesRes, itemsRes, recipesRes, reasonsRes, categoriesRes] = await Promise.all([
+      const [storesRes, itemsRes, recipesRes, reasonsRes] = await Promise.all([
         fetch('/api/stores'),
         fetch('/api/items'),
         fetch('/api/recipes'),
         fetch('/api/waste-reasons'),
-        fetch('/api/categories'),
       ]);
 
       if (storesRes.ok) {
@@ -123,11 +125,6 @@ export default function RecordWaste() {
       if (reasonsRes.ok) {
         const data = await reasonsRes.json();
         setWasteReasons(data.filter((r: WasteReason & { isActive?: boolean }) => r.isActive !== false));
-      }
-
-      if (categoriesRes.ok) {
-        const data = await categoriesRes.json();
-        setCategories(data);
       }
     } catch (error) {
       console.error('Error fetching data:', error);
@@ -545,22 +542,14 @@ export default function RecordWaste() {
                 </div>
               </div>
               <div>
-                <label htmlFor="newItemCategory" className="block text-sm font-medium text-gray-700 mb-1">
+                <label className="block text-sm font-medium text-gray-700 mb-1">
                   Category
                 </label>
-                <select
-                  id="newItemCategory"
-                  value={newItemData.categoryId}
-                  onChange={(e) => setNewItemData((prev) => ({ ...prev, categoryId: e.target.value }))}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent"
-                >
-                  <option value="">No category</option>
-                  {categories.map((cat) => (
-                    <option key={cat.id} value={cat.id}>
-                      {cat.name}
-                    </option>
-                  ))}
-                </select>
+                <CategorySelector
+                  value={newItemData.categoryId || null}
+                  onChange={(categoryId) => setNewItemData((prev) => ({ ...prev, categoryId: categoryId || '' }))}
+                  placeholder="Sin categoría"
+                />
               </div>
               <div className="flex gap-3 pt-4">
                 <button

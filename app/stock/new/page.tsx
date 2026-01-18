@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { LogoWithText } from '@/components/Logo';
+import { CategorySelector } from '@/components/CategorySelector';
 
 type Item = {
   id: string;
@@ -15,6 +16,9 @@ type Item = {
 type Category = {
   id: string;
   name: string;
+  icon?: string | null;
+  level: number;
+  parentId: string | null;
 };
 
 type Store = {
@@ -26,7 +30,6 @@ export default function NewStock() {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
   const [items, setItems] = useState<Item[]>([]);
-  const [categories, setCategories] = useState<Category[]>([]);
   const [stores, setStores] = useState<Store[]>([]);
 
   const [formData, setFormData] = useState({
@@ -34,7 +37,6 @@ export default function NewStock() {
     newItemName: '',
     newItemUnit: 'kg',
     categoryId: '',
-    newCategoryName: '',
     storeId: '',
     quantity: '',
     unitCost: '',
@@ -50,20 +52,17 @@ export default function NewStock() {
 
   const fetchData = async () => {
     try {
-      const [itemsRes, categoriesRes, storesRes] = await Promise.all([
+      const [itemsRes, storesRes] = await Promise.all([
         fetch('/api/items'),
-        fetch('/api/categories'),
         fetch('/api/stores'),
       ]);
 
-      const [itemsData, categoriesData, storesData] = await Promise.all([
+      const [itemsData, storesData] = await Promise.all([
         itemsRes.json(),
-        categoriesRes.json(),
         storesRes.json(),
       ]);
 
       setItems(itemsData);
-      setCategories(categoriesData);
       setStores(storesData);
 
       // Set default store if available
@@ -101,21 +100,6 @@ export default function NewStock() {
 
       // Create new item if in create mode
       if (mode === 'create') {
-        // Create category first if needed
-        let categoryId = formData.categoryId;
-        if (formData.newCategoryName) {
-          const catRes = await fetch('/api/categories', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              name: formData.newCategoryName,
-              accountId: accountId,
-            }),
-          });
-          const newCategory = await catRes.json();
-          categoryId = newCategory.id;
-        }
-
         // Create item
         const itemRes = await fetch('/api/items', {
           method: 'POST',
@@ -123,7 +107,7 @@ export default function NewStock() {
           body: JSON.stringify({
             name: formData.newItemName,
             unit: formData.newItemUnit,
-            categoryId: categoryId || null,
+            categoryId: formData.categoryId || null,
             accountId: accountId,
           }),
         });
@@ -289,31 +273,10 @@ export default function NewStock() {
                     <label className="block text-sm font-medium text-gray-700 mb-2">
                       Category (optional)
                     </label>
-                    <select
-                      value={formData.categoryId}
-                      onChange={(e) =>
-                        setFormData({ ...formData, categoryId: e.target.value })
-                      }
-                      className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent mb-2"
-                    >
-                      <option value="">Choose or create new...</option>
-                      {categories.map((cat) => (
-                        <option key={cat.id} value={cat.id}>
-                          {cat.name}
-                        </option>
-                      ))}
-                    </select>
-                    <input
-                      type="text"
-                      value={formData.newCategoryName}
-                      onChange={(e) =>
-                        setFormData({
-                          ...formData,
-                          newCategoryName: e.target.value,
-                        })
-                      }
-                      placeholder="Or type new category name"
-                      className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    <CategorySelector
+                      value={formData.categoryId || null}
+                      onChange={(categoryId) => setFormData({ ...formData, categoryId: categoryId || '' })}
+                      placeholder="Sin categoría"
                     />
                   </div>
                 </div>
