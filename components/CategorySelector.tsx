@@ -210,26 +210,36 @@ export function CategorySelector({
                 </span>
               </div>
               <div className="py-1">
-                {categories.map((cat) => (
-                  <button
-                    key={cat.id}
-                    type="button"
-                    onClick={() => handleNavigate(cat, 0)}
-                    className={`w-full flex items-center gap-2 px-3 py-2 text-sm text-left transition-colors ${
-                      navigationPath[0]?.id === cat.id
-                        ? 'bg-indigo-50 text-indigo-700'
-                        : 'hover:bg-gray-50 text-gray-700'
-                    }`}
-                  >
-                    {cat.icon && <span className="text-base">{cat.icon}</span>}
-                    <span className="flex-1 truncate">{cat.name}</span>
-                    {cat.children && cat.children.length > 0 && (
-                      <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                      </svg>
-                    )}
-                  </button>
-                ))}
+                {loading ? (
+                  <div className="px-3 py-4 text-center text-sm text-gray-500">
+                    Cargando categorías...
+                  </div>
+                ) : categories.length === 0 ? (
+                  <div className="px-3 py-4 text-center text-sm text-gray-500">
+                    No hay categorías disponibles
+                  </div>
+                ) : (
+                  categories.map((cat) => (
+                    <button
+                      key={cat.id}
+                      type="button"
+                      onClick={() => handleNavigate(cat, 0)}
+                      className={`w-full flex items-center gap-2 px-3 py-2 text-sm text-left transition-colors ${
+                        navigationPath[0]?.id === cat.id
+                          ? 'bg-indigo-50 text-indigo-700'
+                          : 'hover:bg-gray-50 text-gray-700'
+                      }`}
+                    >
+                      {cat.icon && <span className="text-base">{cat.icon}</span>}
+                      <span className="flex-1 truncate">{cat.name}</span>
+                      {cat.children && cat.children.length > 0 && (
+                        <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                        </svg>
+                      )}
+                    </button>
+                  ))
+                )}
               </div>
             </div>
 
