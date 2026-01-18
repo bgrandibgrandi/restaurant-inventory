@@ -4,6 +4,8 @@ import Link from 'next/link';
 import { signOut, useSession } from 'next-auth/react';
 import { useState } from 'react';
 import { LogoWithText } from '@/components/Logo';
+import { StoreSwitcher, StoreSwitchConfirmDialog } from '@/components/StoreSwitcher';
+import { LanguageSwitcher } from '@/components/LanguageSwitcher';
 
 interface PageLayoutProps {
   children: React.ReactNode;
@@ -109,6 +111,12 @@ export default function PageLayout({
             <div className="flex items-center gap-3">
               {actions}
 
+              {/* Store Switcher */}
+              <StoreSwitcher />
+
+              {/* Language Switcher */}
+              <LanguageSwitcher />
+
               {/* Settings */}
               <Link
                 href="/settings/integrations"
@@ -179,6 +187,9 @@ export default function PageLayout({
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {children}
       </main>
+
+      {/* Store Switch Confirmation Dialog */}
+      <StoreSwitchConfirmDialog />
     </div>
   );
 }

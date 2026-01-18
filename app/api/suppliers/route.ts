@@ -2,8 +2,9 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/db';
+import { getUserWithStore } from '@/lib/get-selected-store';
 
-// Get all suppliers for the account
+// Get all suppliers for the selected store
 export async function GET() {
   try {
     const session = await getServerSession(authOptions);
@@ -11,9 +12,14 @@ export async function GET() {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
+    // Get user's selected store
+    const userWithStore = await getUserWithStore();
+
     const suppliers = await prisma.supplier.findMany({
       where: {
         accountId: session.user.accountId,
+        // Filter by selected store if one is selected
+        ...(userWithStore?.selectedStoreId && { storeId: userWithStore.selectedStoreId }),
       },
       include: {
         _count: {
@@ -22,6 +28,7 @@ export async function GET() {
             items: true,
           },
         },
+        store: true,
       },
       orderBy: {
         name: 'asc',
@@ -38,12 +45,21 @@ export async function GET() {
   }
 }
 
-// Create a new supplier
+// Create a new supplier for the selected store
 export async function POST(request: NextRequest) {
   try {
     const session = await getServerSession(authOptions);
     if (!session?.user?.accountId) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    // Get user's selected store
+    const userWithStore = await getUserWithStore();
+    if (!userWithStore?.selectedStoreId) {
+      return NextResponse.json(
+        { error: 'No store selected' },
+        { status: 400 }
+      );
     }
 
     const body = await request.json();
@@ -56,10 +72,11 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Check for existing supplier with same name (case-insensitive)
+    // Check for existing supplier with same name in the same store (case-insensitive)
     const existingSupplier = await prisma.supplier.findFirst({
       where: {
         accountId: session.user.accountId,
+        storeId: userWithStore.selectedStoreId,
         name: {
           equals: name.trim(),
           mode: 'insensitive',
@@ -69,7 +86,7 @@ export async function POST(request: NextRequest) {
 
     if (existingSupplier) {
       return NextResponse.json(
-        { error: 'A supplier with this name already exists', existingSupplier },
+        { error: 'A supplier with this name already exists in this store', existingSupplier },
         { status: 409 }
       );
     }
@@ -82,6 +99,7 @@ export async function POST(request: NextRequest) {
         address: address?.trim() || null,
         notes: notes?.trim() || null,
         accountId: session.user.accountId,
+        storeId: userWithStore.selectedStoreId,
       },
       include: {
         _count: {
@@ -90,6 +108,7 @@ export async function POST(request: NextRequest) {
             items: true,
           },
         },
+        store: true,
       },
     });
 

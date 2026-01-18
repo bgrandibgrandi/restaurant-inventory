@@ -51,26 +51,34 @@ model Role {
 }
 
 model User {
-  id          String       @id @default(cuid())
-  email       String       @unique
-  name        String?
-  image       String?
-  accountId   String
-  account     Account      @relation(fields: [accountId], references: [id])
-  roleId      String?
-  role        Role?        @relation(fields: [roleId], references: [id])
-  stockCounts StockCount[]
-  invoices    Invoice[]
-  createdAt   DateTime     @default(now())
-  updatedAt   DateTime     @updatedAt
+  id                String       @id @default(cuid())
+  email             String       @unique
+  name              String?
+  image             String?
+  accountId         String
+  account           Account      @relation(fields: [accountId], references: [id])
+  roleId            String?
+  role              Role?        @relation(fields: [roleId], references: [id])
+  // User preferences
+  selectedStoreId   String?      // Currently selected store for filtering
+  selectedStore     Store?       @relation("UserSelectedStore", fields: [selectedStoreId], references: [id])
+  preferredLanguage String       @default("en") // "en" or "es"
+  stockCounts       StockCount[]
+  invoices          Invoice[]
+  createdAt         DateTime     @default(now())
+  updatedAt         DateTime     @updatedAt
 }
 
 model Store {
   id               String            @id @default(cuid())
   name             String
   address          String?
+  color            String?           // Auto-assigned color for UI badge (hex)
   accountId        String
   account          Account           @relation(fields: [accountId], references: [id])
+  // Users who have this store selected
+  selectedByUsers  User[]            @relation("UserSelectedStore")
+  // Store-specific data
   stockEntries     StockEntry[]
   stockCounts      StockCount[]
   invoices         Invoice[]
@@ -78,11 +86,15 @@ model Store {
   transfersFrom    StockTransfer[]   @relation("TransferFrom")
   transfersTo      StockTransfer[]   @relation("TransferTo")
   prepPlans        PrepPlan[]
+  recipes          Recipe[]          // Recipes are now store-specific
+  suppliers        Supplier[]        // Suppliers are now store-specific
+  items            Item[]            // Items are now store-specific
+  recipeTags       RecipeTag[]       // Tags are store-specific
   squareConnection SquareConnection? // Each store can have its own Square account
   createdAt        DateTime          @default(now())
 }
 
-// Reusable Item Master (like a product catalog)
+// Item Master (store-specific)
 model Item {
   id                  String              @id @default(cuid())
   name                String
@@ -93,6 +105,8 @@ model Item {
   category            Category?           @relation(fields: [categoryId], references: [id])
   supplierId          String?
   supplier            Supplier?           @relation(fields: [supplierId], references: [id])
+  storeId             String?             // Items are store-specific (optional during migration)
+  store               Store?              @relation(fields: [storeId], references: [id])
   accountId           String
   account             Account             @relation(fields: [accountId], references: [id])
   stockEntries        StockEntry[]
@@ -106,6 +120,8 @@ model Item {
   // Recipe relations
   recipeIngredients   RecipeIngredient[]
   squareModifierMappings SquareModifierMapping[]
+  // For copying between stores
+  sourceItemId        String?             // If copied from another store, reference to original
   createdAt           DateTime            @default(now())
   updatedAt           DateTime            @updatedAt
 }
@@ -171,22 +187,26 @@ model StockCount {
   updatedAt        DateTime     @updatedAt
 }
 
-// Supplier/Vendor
+// Supplier/Vendor (store-specific)
 model Supplier {
-  id        String    @id @default(cuid())
-  name      String
-  email     String?
-  phone     String?
-  address   String?
-  notes     String?
-  accountId String
-  account   Account   @relation(fields: [accountId], references: [id])
-  invoices  Invoice[]
-  items     Item[]
-  createdAt DateTime  @default(now())
-  updatedAt DateTime  @updatedAt
+  id              String    @id @default(cuid())
+  name            String
+  email           String?
+  phone           String?
+  address         String?
+  notes           String?
+  storeId         String?   // Suppliers are store-specific (optional during migration)
+  store           Store?    @relation(fields: [storeId], references: [id])
+  accountId       String
+  account         Account   @relation(fields: [accountId], references: [id])
+  invoices        Invoice[]
+  items           Item[]
+  // For copying between stores
+  sourceSupplierId String?  // If copied from another store, reference to original
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
 
-  @@unique([name, accountId]) // Prevent duplicate suppliers with same name per account
+  @@unique([name, accountId]) // Keep original constraint for now
 }
 
 // Invoice import for tracking purchases
@@ -356,17 +376,19 @@ model Notification {
 // RECIPES & MENU COSTING
 // ============================================
 
-// Recipe tags for filtering (dietary, prep method, etc.)
+// Recipe tags for filtering (dietary, prep method, etc.) - store-specific
 model RecipeTag {
   id          String   @id @default(cuid())
   name        String
   color       String   @default("#6366f1") // Hex color for display
+  storeId     String?  // Tags are store-specific (optional during migration)
+  store       Store?   @relation(fields: [storeId], references: [id])
   accountId   String
   account     Account  @relation(fields: [accountId], references: [id])
   recipes     RecipeTagAssignment[]
   createdAt   DateTime @default(now())
 
-  @@unique([name, accountId])
+  @@unique([name, accountId]) // Keep original constraint for now
 }
 
 // Many-to-many relationship between recipes and tags
@@ -411,7 +433,7 @@ model PrepPlanItem {
   createdAt       DateTime @default(now())
 }
 
-// Recipe/Menu Item definition
+// Recipe/Menu Item definition (store-specific)
 model Recipe {
   id              String             @id @default(cuid())
   name            String
@@ -432,6 +454,8 @@ model Recipe {
   equipment       String?            // JSON array of equipment names
   // Square item this recipe is linked from (for auto-suggestion)
   squareItemId    String?            // Square catalog item ID this recipe was created from
+  storeId         String?            // Recipes are store-specific (optional during migration)
+  store           Store?             @relation(fields: [storeId], references: [id])
   accountId       String
   account         Account            @relation(fields: [accountId], references: [id])
   ingredients     RecipeIngredient[]
@@ -443,6 +467,8 @@ model Recipe {
   prepPlanItems   PrepPlanItem[]
   // Square integration
   squareItemMappings SquareItemMapping[]
+  // For copying between stores
+  sourceRecipeId  String?            // If copied from another store, reference to original
   createdAt       DateTime           @default(now())
   updatedAt       DateTime           @updatedAt
 }

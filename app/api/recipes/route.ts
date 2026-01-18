@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/db';
+import { getUserWithStore } from '@/lib/get-selected-store';
 
 // Get all recipes with ingredients, cost calculation, tags, and Square prices
 export async function GET(request: NextRequest) {
@@ -10,6 +11,9 @@ export async function GET(request: NextRequest) {
     if (!session?.user?.accountId) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
+
+    // Get user's selected store
+    const userWithStore = await getUserWithStore();
 
     const { searchParams } = new URL(request.url);
     const includeSubRecipes = searchParams.get('includeSubRecipes') !== 'false';
@@ -20,6 +24,8 @@ export async function GET(request: NextRequest) {
     const recipes = await prisma.recipe.findMany({
       where: {
         accountId: session.user.accountId,
+        // Filter by selected store if one is selected
+        ...(userWithStore?.selectedStoreId && { storeId: userWithStore.selectedStoreId }),
         ...(activeOnly && { isActive: true }),
         ...(categoryId && { categoryId }),
         ...(!includeSubRecipes && { isSubRecipe: false }),
@@ -128,12 +134,21 @@ export async function GET(request: NextRequest) {
   }
 }
 
-// Create a new recipe
+// Create a new recipe for the selected store
 export async function POST(request: NextRequest) {
   try {
     const session = await getServerSession(authOptions);
     if (!session?.user?.accountId) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    // Get user's selected store
+    const userWithStore = await getUserWithStore();
+    if (!userWithStore?.selectedStoreId) {
+      return NextResponse.json(
+        { error: 'No store selected' },
+        { status: 400 }
+      );
     }
 
     const body = await request.json();
@@ -178,6 +193,7 @@ export async function POST(request: NextRequest) {
         equipment: equipment ? JSON.stringify(equipment) : null,
         squareItemId: squareItemId || null,
         accountId: session.user.accountId,
+        storeId: userWithStore.selectedStoreId,
         ingredients: {
           create: (ingredients || []).map((ing: any) => ({
             itemId: ing.itemId || null,

@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
+import { useTranslation } from '@/lib/i18n';
 
 type Supplier = {
   id: string;
@@ -18,6 +19,7 @@ type Supplier = {
 };
 
 export default function SuppliersPage() {
+  const { t } = useTranslation();
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
   const [loading, setLoading] = useState(true);
   const [showAddForm, setShowAddForm] = useState(false);
@@ -69,6 +71,8 @@ export default function SuppliersPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    console.log('handleSubmit called', { formData, editingId });
+
     if (!formData.name.trim()) {
       alert('Supplier name is required');
       return;
@@ -79,11 +83,15 @@ export default function SuppliersPage() {
       const url = editingId ? `/api/suppliers/${editingId}` : '/api/suppliers';
       const method = editingId ? 'PUT' : 'POST';
 
+      console.log('Fetching', { url, method, formData });
+
       const response = await fetch(url, {
         method,
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(formData),
       });
+
+      console.log('Response status:', response.status);
 
       if (response.ok) {
         await fetchSuppliers();
@@ -92,6 +100,7 @@ export default function SuppliersPage() {
         resetForm();
       } else {
         const error = await response.json();
+        console.error('API error:', error);
         alert(error.error || 'Failed to save supplier');
       }
     } catch (error) {
@@ -103,6 +112,7 @@ export default function SuppliersPage() {
   };
 
   const handleEdit = (supplier: Supplier) => {
+    console.log('handleEdit called with supplier:', supplier);
     setFormData({
       name: supplier.name,
       email: supplier.email || '',
@@ -112,6 +122,7 @@ export default function SuppliersPage() {
     });
     setEditingId(supplier.id);
     setShowAddForm(true);
+    console.log('Form should now be visible');
   };
 
   const handleDelete = async (id: string) => {
@@ -207,7 +218,7 @@ export default function SuppliersPage() {
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <div className="text-center">
           <div className="inline-block h-8 w-8 animate-spin rounded-full border-4 border-solid border-blue-600 border-r-transparent"></div>
-          <p className="mt-4 text-gray-500">Loading...</p>
+          <p className="mt-4 text-gray-500">{t('common.loading')}</p>
         </div>
       </div>
     );
@@ -225,7 +236,7 @@ export default function SuppliersPage() {
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
                 </svg>
               </Link>
-              <h1 className="text-xl font-semibold text-gray-900">Suppliers</h1>
+              <h1 className="text-xl font-semibold text-gray-900">{t('suppliers.title')}</h1>
             </div>
             <div className="flex items-center gap-2">
               {suppliers.length >= 2 && (
@@ -240,7 +251,7 @@ export default function SuppliersPage() {
                   <svg className="w-5 h-5 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" />
                   </svg>
-                  {mergeMode ? 'Cancel Merge' : 'Merge Duplicates'}
+                  {mergeMode ? t('common.cancel') : 'Merge Duplicates'}
                 </button>
               )}
               {!mergeMode && (
@@ -255,7 +266,7 @@ export default function SuppliersPage() {
                   <svg className="w-5 h-5 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
                   </svg>
-                  Add Supplier
+                  {t('suppliers.addSupplier')}
                 </button>
               )}
             </div>
@@ -268,26 +279,26 @@ export default function SuppliersPage() {
         {showAddForm && (
           <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 mb-6">
             <h2 className="text-lg font-semibold text-gray-900 mb-4">
-              {editingId ? 'Edit Supplier' : 'Add New Supplier'}
+              {editingId ? t('suppliers.editSupplier') : t('suppliers.addSupplier')}
             </h2>
             <form onSubmit={handleSubmit} className="space-y-4">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Name *
+                    {t('common.name')} *
                   </label>
                   <input
                     type="text"
                     value={formData.name}
                     onChange={(e) => setFormData({ ...formData, name: e.target.value })}
                     className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                    placeholder="Supplier name"
+                    placeholder={t('suppliers.supplierName')}
                     required
                   />
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Email
+                    {t('suppliers.email')}
                   </label>
                   <input
                     type="email"
@@ -299,7 +310,7 @@ export default function SuppliersPage() {
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Phone
+                    {t('suppliers.phone')}
                   </label>
                   <input
                     type="tel"
@@ -311,7 +322,7 @@ export default function SuppliersPage() {
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Address
+                    {t('suppliers.address')}
                   </label>
                   <input
                     type="text"
@@ -324,14 +335,14 @@ export default function SuppliersPage() {
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Notes
+                  {t('suppliers.notes')}
                 </label>
                 <textarea
                   value={formData.notes}
                   onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
                   rows={2}
                   className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  placeholder="Additional notes about this supplier..."
+                  placeholder={t('suppliers.notes')}
                 />
               </div>
               <div className="flex gap-3">
@@ -340,14 +351,14 @@ export default function SuppliersPage() {
                   disabled={saving}
                   className="px-6 py-2 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-lg transition disabled:opacity-50"
                 >
-                  {saving ? 'Saving...' : editingId ? 'Update Supplier' : 'Add Supplier'}
+                  {saving ? t('common.loading') : editingId ? t('common.update') : t('common.add')}
                 </button>
                 <button
                   type="button"
                   onClick={handleCancel}
                   className="px-6 py-2 bg-gray-200 hover:bg-gray-300 text-gray-700 font-medium rounded-lg transition"
                 >
-                  Cancel
+                  {t('common.cancel')}
                 </button>
               </div>
             </form>
