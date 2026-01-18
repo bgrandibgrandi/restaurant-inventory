@@ -248,7 +248,7 @@ export default function StockMovementsPage() {
       title="Stock Movements"
       subtitle={`${total} movements recorded`}
       backHref="/dashboard"
-      showNav={false}
+     
       actions={
         <div className="flex gap-2">
           <Link

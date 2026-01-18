@@ -5,10 +5,14 @@ import { useTranslation, Language } from '@/lib/i18n';
 
 const LANGUAGES: { code: Language; label: string; flag: string }[] = [
   { code: 'en', label: 'English', flag: '🇺🇸' },
-  { code: 'es', label: 'Español', flag: '🇲🇽' },
+  { code: 'es', label: 'Español', flag: '🇪🇸' },
 ];
 
-export function LanguageSwitcher() {
+interface LanguageSwitcherProps {
+  variant?: 'header' | 'sidebar';
+}
+
+export function LanguageSwitcher({ variant = 'header' }: LanguageSwitcherProps) {
   const { language, setLanguage, isLoading } = useTranslation();
   const [isOpen, setIsOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
@@ -36,17 +40,25 @@ export function LanguageSwitcher() {
     setIsOpen(false);
   };
 
+  const buttonClass = variant === 'sidebar'
+    ? 'flex items-center gap-2 px-3 py-2 bg-gray-50 hover:bg-gray-100 rounded-lg transition-all duration-200 disabled:opacity-50 w-full'
+    : 'flex items-center gap-2 px-2.5 py-1.5 bg-white/80 hover:bg-white border border-gray-200/50 rounded-lg transition-all duration-200 disabled:opacity-50';
+
+  const dropdownClass = variant === 'sidebar'
+    ? 'absolute bottom-full left-0 mb-1 w-full bg-white rounded-xl border border-gray-200 shadow-lg py-1 z-50'
+    : 'absolute top-full right-0 mt-1 w-40 bg-white rounded-xl border border-gray-200/50 shadow-lg py-1 z-50';
+
   return (
     <div className="relative" ref={dropdownRef}>
       <button
         onClick={() => setIsOpen(!isOpen)}
         disabled={isLoading}
-        className="flex items-center gap-2 px-2.5 py-1.5 bg-white/80 hover:bg-white border border-gray-200/50 rounded-lg transition-all duration-200 disabled:opacity-50"
+        className={buttonClass}
         title={currentLanguage.label}
       >
         <span className="text-base">{currentLanguage.flag}</span>
-        <span className="text-sm font-medium text-gray-700 hidden sm:inline">
-          {currentLanguage.code.toUpperCase()}
+        <span className={`text-sm font-medium text-gray-700 ${variant === 'sidebar' ? 'flex-1 text-left' : 'hidden sm:inline'}`}>
+          {variant === 'sidebar' ? currentLanguage.label : currentLanguage.code.toUpperCase()}
         </span>
         <svg
           className={`w-3 h-3 text-gray-400 transition-transform ${isOpen ? 'rotate-180' : ''}`}
@@ -59,7 +71,7 @@ export function LanguageSwitcher() {
       </button>
 
       {isOpen && (
-        <div className="absolute top-full right-0 mt-1 w-40 bg-white rounded-xl border border-gray-200/50 shadow-lg py-1 z-50">
+        <div className={dropdownClass}>
           {LANGUAGES.map((lang) => (
             <button
               key={lang.code}

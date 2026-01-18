@@ -179,7 +179,7 @@ function IntegrationsContent() {
 
   if (loading) {
     return (
-      <PageLayout title="Integrations" backHref="/dashboard" showNav={false}>
+      <PageLayout title="Integrations" backHref="/dashboard">
         <div className="flex items-center justify-center py-20">
           <div className="text-center">
             <div className="inline-block h-8 w-8 animate-spin rounded-full border-4 border-solid border-blue-600 border-r-transparent"></div>
@@ -191,7 +191,7 @@ function IntegrationsContent() {
   }
 
   return (
-    <PageLayout title="Integrations" backHref="/dashboard" showNav={false}>
+    <PageLayout title="Integrations" backHref="/dashboard">
       {/* Messages */}
       {successMessage && (
         <div className="mb-6 p-4 bg-green-50 border border-green-200/50 rounded-2xl text-green-800">
@@ -367,7 +367,7 @@ export default function IntegrationsPage() {
   return (
     <Suspense
       fallback={
-        <PageLayout title="Integrations" backHref="/dashboard" showNav={false}>
+        <PageLayout title="Integrations" backHref="/dashboard">
           <div className="flex items-center justify-center py-20">
             <div className="text-center">
               <div className="inline-block h-8 w-8 animate-spin rounded-full border-4 border-solid border-blue-600 border-r-transparent"></div>

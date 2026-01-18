@@ -395,7 +395,7 @@ export default function CountReportsPage() {
 
   if (loading) {
     return (
-      <PageLayout title="Stock Count Reports" subtitle="Analytics and insights" backHref="/dashboard" showNav={false}>
+      <PageLayout title="Stock Count Reports" subtitle="Analytics and insights" backHref="/dashboard">
         <div className="flex items-center justify-center py-20">
           <div className="text-center">
             <div className="w-12 h-12 border-4 border-blue-600/20 border-t-blue-600 rounded-full animate-spin mx-auto"></div>
@@ -408,7 +408,7 @@ export default function CountReportsPage() {
 
   if (!data) {
     return (
-      <PageLayout title="Stock Count Reports" backHref="/dashboard" showNav={false}>
+      <PageLayout title="Stock Count Reports" backHref="/dashboard">
         <Card>
           <EmptyState
             icon={<svg className="w-8 h-8 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>}
@@ -425,7 +425,7 @@ export default function CountReportsPage() {
       title="Stock Count Reports"
       subtitle="Analytics and insights"
       backHref="/dashboard"
-      showNav={false}
+     
       actions={
         <div className="flex items-center gap-2">
           <Button variant="secondary" size="sm" onClick={exportToCSV} disabled={exporting === 'csv'}>

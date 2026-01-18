@@ -43,7 +43,8 @@
     "unsavedChanges": "You have unsaved changes. Are you sure you want to leave?",
     "copyToStore": "Copy to Store",
     "duplicateFrom": "Duplicate from",
-    "copiedFrom": "Copied from"
+    "copiedFrom": "Copied from",
+    "more": "More"
   },
   "nav": {
     "dashboard": "Dashboard",
@@ -57,9 +58,16 @@
     "count": "Count",
     "stockCount": "Stock Count",
     "reports": "Reports",
+    "analytics": "Analytics",
+    "transfers": "Transfers",
     "settings": "Settings",
     "logout": "Logout",
-    "profile": "Profile"
+    "profile": "Profile",
+    "sections": {
+      "business": "Business",
+      "expenses": "Expenses",
+      "inventory": "Inventory"
+    }
   },
   "store": {
     "selectStore": "Select Store",

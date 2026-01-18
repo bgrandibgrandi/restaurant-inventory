@@ -249,7 +249,7 @@ export default function InvoicesPage() {
 
   if (loading) {
     return (
-      <PageLayout title="Invoice Import" backHref="/dashboard" showNav={false}>
+      <PageLayout title="Invoice Import" backHref="/dashboard">
         <div className="flex items-center justify-center py-20">
           <div className="text-center">
             <div className="inline-block h-8 w-8 animate-spin rounded-full border-4 border-solid border-blue-600 border-r-transparent"></div>
@@ -261,7 +261,7 @@ export default function InvoicesPage() {
   }
 
   return (
-    <PageLayout title="Invoice Import" backHref="/dashboard" showNav={false}>
+    <PageLayout title="Invoice Import" backHref="/dashboard">
       {/* Upload Section */}
       <Card className="mb-8">
         <h2 className="text-lg font-semibold text-gray-900 mb-4">Upload Invoice</h2>

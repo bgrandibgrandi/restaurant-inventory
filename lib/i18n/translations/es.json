@@ -43,7 +43,8 @@
     "unsavedChanges": "Tienes cambios sin guardar. ¿Estás seguro de que deseas salir?",
     "copyToStore": "Copiar a Tienda",
     "duplicateFrom": "Duplicar de",
-    "copiedFrom": "Copiado de"
+    "copiedFrom": "Copiado de",
+    "more": "Más"
   },
   "nav": {
     "dashboard": "Panel",
@@ -57,9 +58,16 @@
     "count": "Conteo",
     "stockCount": "Conteo de Inventario",
     "reports": "Reportes",
+    "analytics": "Analíticas",
+    "transfers": "Transferencias",
     "settings": "Configuración",
     "logout": "Cerrar Sesión",
-    "profile": "Perfil"
+    "profile": "Perfil",
+    "sections": {
+      "business": "Negocio",
+      "expenses": "Gastos",
+      "inventory": "Inventario"
+    }
   },
   "store": {
     "selectStore": "Seleccionar Tienda",

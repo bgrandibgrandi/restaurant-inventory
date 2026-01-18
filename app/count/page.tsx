@@ -89,7 +89,7 @@ export default function CountPage() {
 
   if (loading) {
     return (
-      <PageLayout title="Stock Counts" backHref="/dashboard" showNav={false}>
+      <PageLayout title="Stock Counts" backHref="/dashboard">
         <div className="flex items-center justify-center py-20">
           <div className="text-center">
             <div className="inline-block h-8 w-8 animate-spin rounded-full border-4 border-solid border-blue-600 border-r-transparent"></div>
@@ -101,7 +101,7 @@ export default function CountPage() {
   }
 
   return (
-    <PageLayout title="Stock Counts" backHref="/dashboard" showNav={false}>
+    <PageLayout title="Stock Counts" backHref="/dashboard">
       <div className="max-w-lg mx-auto">
         {/* Start New Count */}
         <Card className="mb-8">
