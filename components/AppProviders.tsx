@@ -45,8 +45,10 @@ export function AppProviders({ children }: { children: React.ReactNode }) {
           fetch('/api/stores'),
         ]);
 
+        let prefsData: UserPreferences | null = null;
+
         if (prefsResponse.ok) {
-          const prefsData = await prefsResponse.json();
+          prefsData = await prefsResponse.json();
           setPreferences(prefsData);
         }
 
@@ -55,8 +57,7 @@ export function AppProviders({ children }: { children: React.ReactNode }) {
           setStores(storesData);
 
           // Check if user needs to select a store
-          const prefs = await prefsResponse.json().catch(() => null);
-          if (!prefs?.selectedStoreId && storesData.length > 0 && !PUBLIC_PAGES.includes(pathname)) {
+          if (!prefsData?.selectedStoreId && storesData.length > 0 && !PUBLIC_PAGES.includes(pathname)) {
             router.push('/select-store');
           }
         }
