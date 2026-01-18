@@ -30,7 +30,10 @@ export function CategorySelector({
   const [categories, setCategories] = useState<Category[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [selectedPath, setSelectedPath] = useState<Category[]>([]);
+  // confirmedPath = what's actually saved/selected
+  const [confirmedPath, setConfirmedPath] = useState<Category[]>([]);
+  // navigationPath = what the user is browsing (not yet confirmed)
+  const [navigationPath, setNavigationPath] = useState<Category[]>([]);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
   // Fetch categories on mount
@@ -60,11 +63,20 @@ export function CategorySelector({
   useEffect(() => {
     if (value && categories.length > 0) {
       const path = findCategoryPath(categories, value);
-      setSelectedPath(path);
+      setConfirmedPath(path);
+      setNavigationPath(path);
     } else {
-      setSelectedPath([]);
+      setConfirmedPath([]);
+      setNavigationPath([]);
     }
   }, [value, categories]);
+
+  // When dropdown opens, sync navigation to confirmed
+  useEffect(() => {
+    if (isOpen) {
+      setNavigationPath(confirmedPath);
+    }
+  }, [isOpen, confirmedPath]);
 
   // Close dropdown when clicking outside
   useEffect(() => {
@@ -94,42 +106,50 @@ export function CategorySelector({
     return [];
   };
 
-  // Handle category selection
-  const handleSelect = (category: Category, level: number) => {
-    const newPath = [...selectedPath.slice(0, level), category];
-    setSelectedPath(newPath);
+  // Handle navigation (browsing categories without confirming)
+  const handleNavigate = (category: Category, level: number) => {
+    const newPath = [...navigationPath.slice(0, level), category];
+    setNavigationPath(newPath);
 
-    // If the category has no children or user explicitly selects it
+    // If the category has no children, auto-confirm the selection
     if (!category.children || category.children.length === 0) {
-      onChange(category.id, newPath);
+      confirmSelection(newPath);
+    }
+  };
+
+  // Confirm the current navigation path as the selection
+  const confirmSelection = (path?: Category[]) => {
+    const finalPath = path || navigationPath;
+    if (finalPath.length > 0) {
+      const lastCategory = finalPath[finalPath.length - 1];
+      setConfirmedPath(finalPath);
+      onChange(lastCategory.id, finalPath);
       setIsOpen(false);
-    } else {
-      // Notify parent of the current selection (for intermediate selections)
-      onChange(category.id, newPath);
     }
   };
 
   // Clear selection
   const handleClear = (e: React.MouseEvent) => {
     e.stopPropagation();
-    setSelectedPath([]);
+    setConfirmedPath([]);
+    setNavigationPath([]);
     onChange(null, []);
   };
 
-  // Get display text
+  // Get display text (from confirmed path)
   const getDisplayText = () => {
-    if (selectedPath.length === 0) return placeholder;
+    if (confirmedPath.length === 0) return placeholder;
 
-    return selectedPath
+    return confirmedPath
       .map(cat => `${cat.icon ? cat.icon + ' ' : ''}${cat.name}`)
       .join(' > ');
   };
 
-  // Get categories for a specific level
+  // Get categories for a specific level (based on navigation path)
   const getCategoriesForLevel = (level: number): Category[] => {
     if (level === 0) return categories;
 
-    const parent = selectedPath[level - 1];
+    const parent = navigationPath[level - 1];
     if (parent && parent.children) {
       return parent.children;
     }
@@ -151,12 +171,12 @@ export function CategorySelector({
             : 'border-gray-300 hover:border-gray-400 bg-white'
         }`}
       >
-        <span className={`flex-1 truncate ${selectedPath.length === 0 || error ? 'text-gray-400' : 'text-gray-900'} ${error ? 'text-red-500' : ''}`}>
+        <span className={`flex-1 truncate ${confirmedPath.length === 0 || error ? 'text-gray-400' : 'text-gray-900'} ${error ? 'text-red-500' : ''}`}>
           {loading ? 'Cargando...' : error ? error : getDisplayText()}
         </span>
 
         <div className="flex items-center gap-1">
-          {selectedPath.length > 0 && !disabled && (
+          {confirmedPath.length > 0 && !disabled && (
             <button
               type="button"
               onClick={handleClear}
@@ -194,9 +214,9 @@ export function CategorySelector({
                   <button
                     key={cat.id}
                     type="button"
-                    onClick={() => handleSelect(cat, 0)}
+                    onClick={() => handleNavigate(cat, 0)}
                     className={`w-full flex items-center gap-2 px-3 py-2 text-sm text-left transition-colors ${
-                      selectedPath[0]?.id === cat.id
+                      navigationPath[0]?.id === cat.id
                         ? 'bg-indigo-50 text-indigo-700'
                         : 'hover:bg-gray-50 text-gray-700'
                     }`}
@@ -214,7 +234,7 @@ export function CategorySelector({
             </div>
 
             {/* Family Categories (Level 1) */}
-            {selectedPath.length > 0 && getCategoriesForLevel(1).length > 0 && (
+            {navigationPath.length > 0 && getCategoriesForLevel(1).length > 0 && (
               <div className="flex-1 min-w-0 overflow-y-auto bg-gray-50/50">
                 <div className="px-3 py-2 border-b border-gray-100 bg-gray-50">
                   <span className="text-xs font-semibold text-gray-500 uppercase tracking-wider">
@@ -226,9 +246,9 @@ export function CategorySelector({
                     <button
                       key={cat.id}
                       type="button"
-                      onClick={() => handleSelect(cat, 1)}
+                      onClick={() => handleNavigate(cat, 1)}
                       className={`w-full flex items-center gap-2 px-3 py-2 text-sm text-left transition-colors ${
-                        selectedPath[1]?.id === cat.id
+                        navigationPath[1]?.id === cat.id
                           ? 'bg-indigo-50 text-indigo-700'
                           : 'hover:bg-gray-100 text-gray-700'
                       }`}
@@ -247,7 +267,7 @@ export function CategorySelector({
             )}
 
             {/* Subfamily Categories (Level 2) */}
-            {selectedPath.length > 1 && getCategoriesForLevel(2).length > 0 && (
+            {navigationPath.length > 1 && getCategoriesForLevel(2).length > 0 && (
               <div className="flex-1 min-w-0 overflow-y-auto">
                 <div className="px-3 py-2 border-b border-gray-100 bg-gray-50">
                   <span className="text-xs font-semibold text-gray-500 uppercase tracking-wider">
@@ -259,9 +279,9 @@ export function CategorySelector({
                     <button
                       key={cat.id}
                       type="button"
-                      onClick={() => handleSelect(cat, 2)}
+                      onClick={() => handleNavigate(cat, 2)}
                       className={`w-full flex items-center gap-2 px-3 py-2 text-sm text-left transition-colors ${
-                        selectedPath[2]?.id === cat.id
+                        navigationPath[2]?.id === cat.id
                           ? 'bg-indigo-50 text-indigo-700'
                           : 'hover:bg-gray-50 text-gray-700'
                       }`}
@@ -275,15 +295,15 @@ export function CategorySelector({
             )}
           </div>
 
-          {/* Footer with selected path */}
-          {selectedPath.length > 0 && (
+          {/* Footer with navigation path and confirm button */}
+          {navigationPath.length > 0 && (
             <div className="px-3 py-2 border-t border-gray-100 bg-gray-50">
               <div className="flex items-center justify-between">
                 <span className="text-xs text-gray-500">
-                  {selectedPath.map((cat, i) => (
+                  {navigationPath.map((cat, i) => (
                     <span key={cat.id}>
                       {i > 0 && <span className="mx-1">{'>'}</span>}
-                      <span className={i === selectedPath.length - 1 ? 'font-medium text-gray-700' : ''}>
+                      <span className={i === navigationPath.length - 1 ? 'font-medium text-gray-700' : ''}>
                         {cat.name}
                       </span>
                     </span>
@@ -291,10 +311,10 @@ export function CategorySelector({
                 </span>
                 <button
                   type="button"
-                  onClick={() => setIsOpen(false)}
-                  className="text-xs font-medium text-indigo-600 hover:text-indigo-700"
+                  onClick={() => confirmSelection()}
+                  className="text-xs font-medium text-indigo-600 hover:text-indigo-700 px-2 py-1 bg-indigo-50 rounded"
                 >
-                  Confirmar
+                  Seleccionar
                 </button>
               </div>
             </div>
