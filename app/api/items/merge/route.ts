@@ -88,7 +88,6 @@ export async function POST(request: NextRequest) {
     );
 
     return NextResponse.json({
-      success: true,
       ...result,
       message: `Items fusionados. ${result.migratedRecipes} receta(s) actualizada(s).`,
     });

@@ -38,16 +38,16 @@ export async function POST(
       return NextResponse.json({ error: 'Count not found' }, { status: 404 });
     }
 
-    if (stockCount.status !== 'completed') {
+    if (stockCount.status === 'approved') {
       return NextResponse.json(
-        { error: 'Count must be completed before approval' },
+        { error: 'Count has already been approved' },
         { status: 400 }
       );
     }
 
-    if (stockCount.status === 'approved') {
+    if (stockCount.status !== 'completed') {
       return NextResponse.json(
-        { error: 'Count has already been approved' },
+        { error: 'Count must be completed before approval' },
         { status: 400 }
       );
     }
